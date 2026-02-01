@@ -1,6 +1,6 @@
 #+TITLE: 001 - Layered Runtime Architecture
 #+AUTHOR: jaaron
-#+STATUS: Draft
+#+STATUS: Active
 #+CATEGORY: architecture
 #+CREATED: [2026-02-01]
 #+LAST_MODIFIED: [2026-02-01]
@@ -260,10 +260,16 @@ Decision: Nix inside. Enables dynamic project layering which is essential for th
 
 Decision: Nix dockerTools (native). Single source of truth, no Dockerfile maintenance.
 
-** OPEN How to handle substrate versioning
+** DECIDED How to handle substrate versioning
+:PROPERTIES:
+:DECIDED: [2026-02-01]
+:END:
 
-If substrate changes, how do existing users update? Pin via flake.lock? Auto-update?
+Use flake.lock pinning (standard nix behavior). Users control updates via =nix flake update=. Stay close to nix, be selective in layers we add.
 
-** OPEN deps.toml vs flake.nix for projects
+** DECIDED deps.toml vs flake.nix for projects
+:PROPERTIES:
+:DECIDED: [2026-02-01]
+:END:
 
-Should we prioritize deps.toml (simpler) or flake.nix composition (more flexible)? Or both?
+Support both. deps.toml for simpler user configuration of their specific project. flake.nix always available for power users who need full flexibility.

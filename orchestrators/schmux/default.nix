@@ -1,4 +1,4 @@
-{ pkgs, system }:
+{ pkgs, system, substrate ? [] }:
 
 let
   version = "1.1.1";
@@ -37,7 +37,12 @@ let
     sha256 = "c77175edee07dd16698964bf5d000f497677291bd8573e750d60ce52f1e591c0";
   };
 
-  # Runtime dependencies
+  # Schmux-specific runtime dependencies (not in substrate)
+  # Note: tmux, git, bash, coreutils are now provided by substrate
+  schmuxDeps = with pkgs; [];
+
+  # Combined runtime deps for the package wrapper
+  # These are baked into the binary wrapper for standalone use
   runtimeDeps = with pkgs; [ tmux git bash coreutils ];
 
   # The schmux package
@@ -78,8 +83,9 @@ let
   };
 
   # Shell for running schmux
+  # Composes: substrate + schmux package + schmux-specific deps
   shell = pkgs.mkShell {
-    packages = [ package ] ++ runtimeDeps;
+    packages = [ package ] ++ schmuxDeps ++ substrate;
 
     shellHook = ''
       echo "schmux ${version} environment"

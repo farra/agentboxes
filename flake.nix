@@ -11,18 +11,34 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
+        # Import substrate (common tools layer)
+        substrate = import ./lib/substrate.nix { inherit pkgs; };
+
         # Import orchestrator packages
-        schmux = import ./orchestrators/schmux { inherit pkgs system; };
+        schmux = import ./orchestrators/schmux { inherit pkgs system substrate; };
+
+        # Import OCI image builders
+        baseImage = import ./images/base.nix { inherit pkgs substrate; };
       in
       {
         # Packages that can be built
         packages = {
           schmux = schmux.package;
+          base-image = baseImage;
           default = schmux.package;
         };
 
         # Development/runtime shells
         devShells = {
+          # Substrate: just the common tools layer
+          substrate = pkgs.mkShell {
+            packages = substrate;
+            shellHook = ''
+              echo "agentboxes substrate environment"
+              echo "Common tools: git, jq, rg, fd, fzf, tmux, htop, etc."
+            '';
+          };
+
           schmux = schmux.shell;
           default = schmux.shell;
         };

@@ -26,7 +26,7 @@ The agentboxes distribution provides:
 
 - **schmux binary** (v1.1.1) - pre-built from GitHub releases
 - **Dashboard assets** - React web UI for monitoring sessions
-- **Runtime dependencies** - tmux, git, bash
+- **Substrate tools** - Common utilities: git, jq, ripgrep, fd, fzf, tmux, htop, curl, rsync, and more
 
 You do NOT need Go or Node.js installed - the binary is pre-built.
 

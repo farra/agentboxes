@@ -33,6 +33,17 @@ Each environment includes all necessary dependencies (language runtimes, tools, 
 
 ## Available Environments
 
+### Substrate (Common Tools)
+
+All environments include the **substrate layer** - a curated set of tools for development workflows:
+
+```bash
+# Use substrate directly for a minimal environment
+nix develop github:farra/agentboxes#substrate
+```
+
+Includes: git, curl, wget, jq, yq, ripgrep, fd, fzf, tree, less, file, openssh, rsync, tmux, htop
+
 ### Orchestrators
 
 | Name | Description | Status | Command |
@@ -74,15 +85,32 @@ nix build github:farra/agentboxes#schmux
 ./result/bin/schmux version
 ```
 
-### Container Images (planned)
+### Container Images
 
-OCI image support for EC2/distrobox deployment is planned.
+```bash
+# Build the base image (includes substrate tools)
+nix build github:farra/agentboxes#base-image
+
+# Load into Docker
+docker load < result
+
+# Run interactively
+docker run -it agentboxes-base:latest
+
+# Use with distrobox
+distrobox create --image agentboxes-base:latest --name agentbox
+distrobox enter agentbox
+```
 
 ## Project Structure
 
 ```
 agentboxes/
 ├── flake.nix                 # Root flake with packages and devShells
+├── lib/
+│   └── substrate.nix         # Common tools layer
+├── images/
+│   └── base.nix              # Base OCI image definition
 ├── orchestrators/
 │   └── schmux/
 │       └── default.nix       # schmux package definition

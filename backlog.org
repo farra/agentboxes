@@ -6,7 +6,76 @@
 Active tasks checked out from design docs.
 
 ** Active
-# Queue tasks here with /task-queue or M-x backlog/task-queue
+
+*** TODO [AB-001-01] Create lib/substrate.nix with common tools          :p1:
+:PROPERTIES:
+:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-01 in 001]]
+:EFFORT: S
+:HANDOFF:
+:WORKED_BY:
+:END:
+
+Define the substrate package list and export from flake.
+
+*** TODO [AB-001-02] Update schmux to include substrate                  :p1:
+:PROPERTIES:
+:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-02 in 001]]
+:EFFORT: S
+:HANDOFF:
+:WORKED_BY:
+:END:
+
+Modify orchestrators/schmux/default.nix to compose with substrate.
+
+*** TODO [AB-001-03] Create base OCI image with nix                      :p1:
+:PROPERTIES:
+:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-03 in 001]]
+:EFFORT: M
+:HANDOFF:
+:WORKED_BY:
+:END:
+
+Use dockerTools.buildImage to create agentboxes-base image with nix + git.
+
+*** TODO [AB-001-04] Test distrobox locally with base image              :p2:
+:PROPERTIES:
+:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-04 in 001]]
+:EFFORT: M
+:HANDOFF:
+:WORKED_BY:
+:END:
+
+Validate the distrobox workflow: create, enter, nix develop, schmux start.
+
+*** TODO [AB-001-05] Port mkProjectShell from cautomaton-develops        :p2:
+:PROPERTIES:
+:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-05 in 001]]
+:EFFORT: M
+:HANDOFF:
+:WORKED_BY:
+:END:
+
+Enable deps.toml to devShell for project-specific configuration.
+
+*** TODO [AB-001-06] Document user journey for local and remote          :p2:
+:PROPERTIES:
+:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-06 in 001]]
+:EFFORT: S
+:HANDOFF:
+:WORKED_BY:
+:END:
+
+Write docs covering the full workflow from image to running orchestrator.
+
+*** TODO [AB-001-07] Test on remote EC2 via Tailscale                    :p3:
+:PROPERTIES:
+:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-07 in 001]]
+:EFFORT: L
+:HANDOFF:
+:WORKED_BY:
+:END:
+
+End-to-end validation of remote deployment scenario.
 
 ** Blocked
 # Tasks waiting on external dependency
