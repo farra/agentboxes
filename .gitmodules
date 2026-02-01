@@ -1,0 +1,6 @@
+[submodule "vendor/cautomaton-develops"]
+	path = vendor/cautomaton-develops
+	url = git@github.com:farra/cautomaton-develops.git
+[submodule "vendor/schmux"]
+	path = vendor/schmux
+	url = git@github.com:sergeknystautas/schmux.git

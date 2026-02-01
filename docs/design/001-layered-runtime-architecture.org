@@ -1,0 +1,269 @@
+#+TITLE: 001 - Layered Runtime Architecture
+#+AUTHOR: jaaron
+#+STATUS: Draft
+#+CATEGORY: architecture
+#+CREATED: [2026-02-01]
+#+LAST_MODIFIED: [2026-02-01]
+#+SETUPFILE: ../../org-setup.org
+
+* Summary
+
+Define a layered architecture for agentboxes that enables running AI orchestrators (schmux, gastown, etc.) both locally and remotely via nix develop or distrobox. The architecture supports composing orchestrator runtimes with project-specific tooling through a clear separation of concerns.
+
+* Motivation
+
+Multi-agent orchestrators like schmux don't fit the devcontainer model well:
+- They manage multiple projects/workspaces internally
+- They maintain long-running state (tmux sessions, daemon processes)
+- They're more like "virtual workstations" than "project containers"
+
+We need an architecture that:
+1. Works locally via =nix develop=
+2. Works remotely on EC2/VMs via nix or distrobox
+3. Allows layering project-specific deps (rust, python, node) on top of orchestrator runtime
+4. Provides a common substrate of useful tools
+5. Keeps configuration concerns properly separated
+
+* Design
+
+** Layer Model
+
+#+begin_example
+┌─────────────────────────────────────────────────────────┐
+│ Layer 4: Project deps (rust, python, node)              │
+│          Source: project's flake.nix or deps.toml      │
+├─────────────────────────────────────────────────────────┤
+│ Layer 3: Orchestrator (schmux binary + runtime)         │
+│          Source: agentboxes#schmux                      │
+├─────────────────────────────────────────────────────────┤
+│ Layer 2: Substrate (jq, rg, fd, curl, common tools)     │
+│          Source: agentboxes/lib/substrate.nix           │
+├─────────────────────────────────────────────────────────┤
+│ Layer 1: Base image (nix + git)                         │
+│          Source: OCI image for distrobox                │
+└─────────────────────────────────────────────────────────┘
+#+end_example
+
+** Layer 1: Base Image
+
+Minimal OCI image suitable for distrobox containing:
+- Nix (multi-user or single-user install)
+- Git (for flake fetching and orchestrator use)
+- Basic shell (bash)
+
+This is the "root image configuration" - what's assumed ready on the box.
+
+** Layer 2: Substrate
+
+Common tools that are "always useful" for any agentbox environment:
+
+#+begin_src nix
+# lib/substrate.nix
+{ pkgs }: with pkgs; [
+  # Core
+  git curl wget bash coreutils gnugrep gnused
+
+  # Data manipulation
+  jq yq-go
+
+  # Search
+  ripgrep fd fzf
+
+  # Inspection
+  tree less file
+
+  # Network
+  openssh rsync
+
+  # Process management
+  tmux htop
+]
+#+end_src
+
+Every orchestrator shell includes substrate. Users can rely on these tools existing.
+
+** Layer 3: Orchestrators
+
+Each orchestrator (schmux, gastown, crewai) provides:
+- Pre-built binary or runtime
+- Orchestrator-specific dependencies
+- Inherits substrate
+
+Example structure:
+#+begin_src nix
+# orchestrators/schmux/default.nix
+{ pkgs, substrate }:
+{
+  shell = pkgs.mkShell {
+    packages = substrate ++ [ schmuxPackage pkgs.tmux pkgs.git ];
+  };
+}
+#+end_src
+
+** Layer 4: Project Dependencies
+
+Projects being worked on (via the orchestrator) have their own tooling needs. Two approaches:
+
+*** Option A: Project flake.nix with composition
+
+#+begin_src nix
+# User's project flake.nix
+{
+  inputs.agentboxes.url = "github:farra/agentboxes";
+
+  outputs = { self, agentboxes, nixpkgs }: {
+    devShells.default = pkgs.mkShell {
+      inputsFrom = [ agentboxes.devShells.x86_64-linux.substrate ];
+      packages = [ pkgs.rustc pkgs.cargo ];
+    };
+  };
+}
+#+end_src
+
+*** Option B: deps.toml (simpler, AI-friendly)
+
+#+begin_src toml
+# project deps.toml
+[base]
+include = ["substrate"]  # from agentboxes
+
+[tools]
+rust = "stable"
+nodejs = "20"
+#+end_src
+
+deps.toml is the "per-instance configuration" layer - simpler than flake.nix for common cases.
+
+** Configuration Tiers
+
+Three distinct configuration concerns:
+
+| Tier | Scope | Examples | Responsibility |
+|------+-------+----------+----------------|
+| Root image | System-wide | nix, git installed | Image builder |
+| Per-user | User home | SSH keys, chezmoi, API keys | User on first login |
+| Per-application | App config | ~/.schmux/config.json | User per orchestrator |
+
+This mirrors devcontainer patterns but on VMs/distrobox where state persists.
+
+** Distrobox Strategy
+
+Why distrobox over devcontainers:
+- Persistent containers (tmux sessions survive)
+- Shares =$HOME= (config, SSH keys, workspaces persist)
+- Integrates with host system
+- Feels like a VM but with container efficiency
+
+Distrobox workflow:
+1. =distrobox create --image agentboxes-base --name dev=
+2. =distrobox enter dev=
+3. =nix develop github:farra/agentboxes#schmux= (gets orchestrator + substrate)
+4. =schmux start= (configure repos, spawn agents)
+5. Each workspace can have its own =flake.nix= or =deps.toml=
+
+** Remote Access
+
+Assume Tailscale on remote instances:
+- Magic DNS for host resolution
+- Tailnet SSH for secure access
+- Dashboard accessible via tailnet IP
+
+No need to bind to 0.0.0.0 or manage firewall rules initially.
+
+** Auth & Secrets
+
+Higher-layer concern, handled via:
+- chezmoi (dotfile management)
+- envdir (environment variables)
+- Pulumi ESC or similar (secrets management)
+
+Not in scope for agentboxes itself - we provide the runtime, users provide credentials.
+
+* Decision
+
+Proceed with the layered model:
+- Nix inside distrobox containers (enables dynamic layering)
+- Substrate as shared foundation
+- deps.toml for simple project configuration
+- OCI images built via nix dockerTools
+
+* Tasks
+:PROPERTIES:
+:CATEGORY: tasks
+:END:
+
+** TODO [AB-001-01] Create lib/substrate.nix with common tools           :p1:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Define the substrate package list and export from flake.
+
+** TODO [AB-001-02] Update schmux to include substrate                   :p1:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Modify orchestrators/schmux/default.nix to compose with substrate.
+
+** TODO [AB-001-03] Create base OCI image with nix                       :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Use dockerTools.buildImage to create agentboxes-base image with nix + git.
+
+** TODO [AB-001-04] Test distrobox locally with base image               :p2:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Validate the distrobox workflow: create, enter, nix develop, schmux start.
+
+** TODO [AB-001-05] Port mkProjectShell from cautomaton-develops         :p2:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Enable deps.toml → devShell for project-specific configuration.
+
+** TODO [AB-001-06] Document user journey for local and remote           :p2:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Write docs covering the full workflow from image to running orchestrator.
+
+** TODO [AB-001-07] Test on remote EC2 via Tailscale                     :p3:
+:PROPERTIES:
+:EFFORT: L
+:END:
+
+End-to-end validation of remote deployment scenario.
+
+* Questions
+:PROPERTIES:
+:CATEGORY: questions
+:END:
+
+** DECIDED Nix inside distrobox vs pre-built only
+:PROPERTIES:
+:DECIDED: [2026-02-01]
+:END:
+
+Decision: Nix inside. Enables dynamic project layering which is essential for the use case.
+
+** DECIDED OCI image approach
+:PROPERTIES:
+:DECIDED: [2026-02-01]
+:END:
+
+Decision: Nix dockerTools (native). Single source of truth, no Dockerfile maintenance.
+
+** OPEN How to handle substrate versioning
+
+If substrate changes, how do existing users update? Pin via flake.lock? Auto-update?
+
+** OPEN deps.toml vs flake.nix for projects
+
+Should we prioritize deps.toml (simpler) or flake.nix composition (more flexible)? Or both?
