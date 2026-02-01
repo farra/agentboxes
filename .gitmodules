@@ -10,3 +10,6 @@
 [submodule "vendor/openclaw"]
 	path = vendor/openclaw
 	url = https://github.com/openclaw/openclaw
+[submodule "vendor/ralph"]
+	path = vendor/ralph
+	url = git@github.com:frankbria/ralph-claude-code.git

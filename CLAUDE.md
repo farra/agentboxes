@@ -27,8 +27,8 @@ The user already has [cautomaton-develops](https://github.com/farra/cautomaton-d
 |------|----------|----------|------|
 | schmux | Go 1.24 | tmux, nodejs, git | Local (friend's project) |
 | gastown | Go 1.23 | tmux, beads, sqlite, git | github.com/steveyegge/gastown |
-| crewai | Python 3.12 | uv | github.com/crewAIInc/crewAI |
-| maestro | TypeScript | nodejs, electron | github.com/pedramamini/Maestro (desktop app, less suitable for server) |
+| openclaw | TypeScript | nodejs, pnpm | github.com/The-Grit-Agencies/OpenClaw |
+| ralph | Python | claude-code | Ralph Wiggum autonomous Claude runner |
 
 ### Individual Agents
 
@@ -36,7 +36,8 @@ The user already has [cautomaton-develops](https://github.com/farra/cautomaton-d
 |------|----------|----------|--------|
 | claude | Node.js | Claude Code CLI (via claude-code-nix) | Available |
 | codex | Rust | Codex CLI (via codex-cli-nix) | Available |
-| aider | Python | aider-chat package | Planned |
+| gemini | Go | Google Gemini CLI | Planned |
+| opencode | Go | OpenCode CLI | Planned |
 
 ## Architecture
 
@@ -119,12 +120,14 @@ Project environments are configured via `deps.toml`:
 ```toml
 # Orchestrator (optional - omit for agent-only environments)
 [orchestrator]
-name = "schmux"  # schmux | gastown | openclaw
+name = "schmux"  # schmux | gastown | openclaw | ralph
 
 # Agents to include (set to true to enable)
 [agents]
 claude = true
 codex = true
+gemini = true
+opencode = true
 
 # Language runtimes with version pinning
 [runtimes]

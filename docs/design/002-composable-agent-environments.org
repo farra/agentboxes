@@ -16,7 +16,7 @@ Builds on [[file:001-layered-runtime-architecture.org][001 - Layered Runtime Arc
 
 ** Current State
 
-Today, agentboxes provides orchestrator shells (schmux, gastown, openclaw) that assume agents (claude, aider, codex) are pre-installed on the host system. This works for:
+Today, agentboxes provides orchestrator shells (schmux, gastown, openclaw) that assume agents (claude, codex, gemini, opencode) are pre-installed on the host system. This works for:
 
 - Users who already have agents installed globally
 - Simple "just give me the orchestrator" use cases
@@ -30,7 +30,7 @@ But it fails for:
 
 ** Problem
 
-There's no way to say "I want schmux with claude and aider and python 3.12" in a single declarative configuration that works for both local development and container images.
+There's no way to say "I want schmux with claude and codex and python 3.12" in a single declarative configuration that works for both local development and container images.
 
 ** Goals
 
@@ -43,7 +43,7 @@ There's no way to say "I want schmux with claude and aider and python 3.12" in a
 
 ** Scenario A: Host Has Agents (Status Quo)
 
-User has claude, aider already installed on their machine.
+User has claude, codex already installed on their machine.
 
 #+begin_src bash
 # Just get the orchestrator, agents expected on PATH
@@ -66,7 +66,7 @@ name = "schmux"
 
 [agents]
 claude = true
-aider = true
+codex = true
 
 [runtimes]
 python = "3.12"
@@ -123,7 +123,7 @@ cat deps.toml
 # name = "gastown"
 # [agents]
 # claude = true
-# aider = true
+# codex = true
 # [runtimes]
 # python = "3.12"
 # go = "1.23"
@@ -155,8 +155,9 @@ name = "schmux"           # schmux | gastown | openclaw | ralph
 # Agents to include (all optional)
 [agents]
 claude = true             # Claude Code CLI
-aider = true              # Aider
 codex = true              # OpenAI Codex CLI
+gemini = true             # Google Gemini CLI
+opencode = true           # OpenCode CLI
 # Version pinning (optional)
 # claude = "1.0.47"
 
@@ -178,7 +179,7 @@ include = ["complete"]    # baseline | complete | minimal
 ┌─────────────────────────────────────────────────────┐
 │                    deps.toml                         │
 │  orchestrator: schmux                                │
-│  agents: [claude, aider]                             │
+│  agents: [claude, codex]                             │
 │  runtimes: [python 3.12]                             │
 └─────────────────────────────────────────────────────┘
                         │
@@ -189,7 +190,7 @@ include = ["complete"]    # baseline | complete | minimal
 │  substrate ─────────────────────┐                    │
 │  + schmux (orchestrator)        │                    │
 │  + claude-code (from flake)     ├──► devShell        │
-│  + aider (from nixpkgs/pip)     │                    │
+│  + codex-cli (from flake)       │                    │
 │  + python 3.12                  │                    │
 └─────────────────────────────────────────────────────┘
                         │
@@ -261,10 +262,12 @@ agentboxes/
 ├── agents/
 │   ├── claude/
 │   │   └── default.nix           # Wrapper for claude-code-nix
-│   ├── aider/
-│   │   └── default.nix           # Python + aider-chat
-│   └── codex/
-│       └── default.nix           # Wrapper for codex-cli-nix
+│   ├── codex/
+│   │   └── default.nix           # Wrapper for codex-cli-nix
+│   ├── gemini/
+│   │   └── default.nix           # Google Gemini CLI (planned)
+│   └── opencode/
+│       └── default.nix           # OpenCode CLI (planned)
 ├── orchestrators/                # (existing)
 ├── templates/
 │   └── project/
@@ -301,7 +304,7 @@ Wrapper that uses claude-code-nix input, exports package and shell.
 :EFFORT: M
 :END:
 
-CANCELLED: Skipping aider for initial implementation. Focus on claude and codex first.
+CANCELLED: Dropping aider from scope. Focus on claude, codex, gemini, opencode.
 
 ** DONE [AB-002-04] Create agents/codex/default.nix                    :p1:
 CLOSED: [2026-02-01]
@@ -346,7 +349,7 @@ CLOSED: [2026-02-01]
 :EFFORT: S
 :END:
 
-Export devShells.claude, devShells.aider, devShells.codex for standalone agent use.
+Export devShells.claude, devShells.codex (and gemini, opencode when implemented) for standalone agent use.
 
 ** TODO [AB-002-09] Document deps.toml format                          :p2:
 :PROPERTIES:
@@ -386,7 +389,7 @@ Yes, auto-include for agent-specific orchestrators (ralph→claude). Agent-agnos
 :DECIDED: [2026-02-01]
 :END:
 
-Skip aider for initial implementation. Focus on claude and codex first.
+Dropping aider from scope. Focus on claude, codex, gemini, and opencode.
 
 ** DECIDED Version pinning strategy?
 :PROPERTIES:

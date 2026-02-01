@@ -6,14 +6,17 @@
 # Run `nix develop` to enter the environment.
 
 # Orchestrator (optional) - multi-agent coordinator
-# Available: schmux, gastown, openclaw
+# Available: schmux, gastown, openclaw, ralph
 [orchestrator]
 name = "schmux"
 
 # AI Agents - set to true to include
+# Available: claude, codex (gemini, opencode planned)
 [agents]
 claude = true
 # codex = true
+# gemini = true
+# opencode = true
 
 # Language runtimes with version pinning
 [runtimes]

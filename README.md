@@ -19,8 +19,8 @@ schmux status  # Opens dashboard at http://localhost:7337
 
 **agentboxes** provides reproducible Nix-based development environments for:
 
-1. **Individual AI Agents** - Claude Code, Aider, OpenCode, Codex CLI
-2. **Agent Orchestrators** - Schmux, Gastown, CrewAI, and others
+1. **Individual AI Agents** - Claude Code, Codex CLI, Gemini CLI, OpenCode
+2. **Agent Orchestrators** - Schmux, Gastown, Ralph Wiggum, OpenClaw
 
 Each environment includes all necessary dependencies (language runtimes, tools, CLI utilities) so you can evaluate and run these tools without polluting your system.
 
@@ -51,7 +51,7 @@ Includes: git, curl, wget, jq, yq, ripgrep, fd, fzf, tree, less, file, openssh, 
 | `schmux` | Multi-agent tmux orchestrator | Available | `nix develop .#schmux` |
 | `gastown` | Multi-agent convoy orchestrator | Available | `nix develop .#gastown` |
 | `openclaw` | Multi-channel AI gateway | Available | `nix develop .#openclaw` |
-| `crewai` | Role-playing agent framework | Planned | - |
+| `ralph` | Ralph Wiggum autonomous Claude runner | Planned | - |
 
 ### Agents
 
@@ -59,7 +59,8 @@ Includes: git, curl, wget, jq, yq, ripgrep, fd, fzf, tree, less, file, openssh, 
 |------|-------------|--------|---------|
 | `claude` | Claude Code CLI | Available | `nix develop .#claude` |
 | `codex` | OpenAI Codex CLI | Available | `nix develop .#codex` |
-| `aider` | Aider AI pair programming | Planned | - |
+| `gemini` | Google Gemini CLI | Planned | - |
+| `opencode` | OpenCode CLI | Planned | - |
 
 See [docs/orchestrators/](docs/orchestrators/) for detailed guides.
 
