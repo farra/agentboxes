@@ -5,11 +5,8 @@ OpenClaw is a local-first, single-user AI agent gateway with multi-channel messa
 ## Quick Start
 
 ```bash
-# Enter the openclaw environment
+# Enter the openclaw environment (auto-installs on first use)
 nix develop github:farra/agentboxes#openclaw
-
-# Install openclaw via npm (one-time)
-npm install -g openclaw@latest
 
 # Run the onboarding wizard
 openclaw onboard --install-daemon
@@ -34,10 +31,11 @@ OpenClaw differs from schmux/gastown:
 | Aspect | schmux/gastown | openclaw |
 |--------|----------------|----------|
 | Distribution | Pre-built Go binary | npm package |
-| Install | Automatic via Nix | `npm install -g` in shell |
+| Install | Bundled in Nix | Auto-installed on first shell entry |
 | Runtime | Self-contained | Node.js + native deps |
+| Location | Nix store | `~/.local/share/agentboxes/openclaw` |
 
-The agentboxes environment provides all runtime dependencies; you just need to install the openclaw package via npm.
+The shell auto-installs openclaw to a local prefix on first use, keeping it isolated from your system.
 
 ## Key Components
 

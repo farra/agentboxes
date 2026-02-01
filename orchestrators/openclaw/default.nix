@@ -1,12 +1,10 @@
 # OpenClaw orchestrator environment
 #
 # Unlike schmux/gastown (pre-built Go binaries), OpenClaw is an npm package
-# with native dependencies. We provide the Node.js runtime and let users
-# install via npm.
+# with native dependencies. We auto-install to a local prefix on first use.
 #
 # Usage:
 #   nix develop .#openclaw
-#   npm install -g openclaw@latest
 #   openclaw onboard --install-daemon
 
 { pkgs, system, substrate ? [] }:
@@ -36,16 +34,21 @@ let
     packages = openclawDeps ++ substrate;
 
     shellHook = ''
+      # Use a local npm prefix to avoid system pollution
+      export NPM_CONFIG_PREFIX="$HOME/.local/share/agentboxes/openclaw"
+      export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"
+
       echo "openclaw environment (Node.js ${nodejs.version})"
-      echo ""
+
+      # Check if openclaw is installed, install if not
       if command -v openclaw &> /dev/null; then
-        echo "openclaw is installed: $(openclaw --version 2>/dev/null || echo 'run openclaw --version')"
+        echo "openclaw $(openclaw --version 2>/dev/null || echo 'installed')"
       else
-        echo "To install openclaw:"
-        echo "  npm install -g openclaw@latest"
+        echo "Installing openclaw..."
+        mkdir -p "$NPM_CONFIG_PREFIX"
+        npm install -g openclaw@latest
         echo ""
-        echo "Then run onboarding:"
-        echo "  openclaw onboard --install-daemon"
+        echo "openclaw installed. Run 'openclaw onboard' to get started."
       fi
     '';
   };
@@ -53,6 +56,6 @@ let
 in
 {
   inherit shell;
-  # No pre-built package - users install via npm
+  # No pre-built package - installed via npm in shellHook
   package = null;
 }
