@@ -14,6 +14,7 @@ with pkgs; [
   coreutils
   gnugrep
   gnused
+  which
 
   # Data processing
   jq
