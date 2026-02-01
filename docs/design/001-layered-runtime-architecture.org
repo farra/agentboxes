@@ -192,21 +192,24 @@ Proceed with the layered model:
 :CATEGORY: tasks
 :END:
 
-** TODO [AB-001-01] Create lib/substrate.nix with common tools           :p1:
+** DONE [AB-001-01] Create lib/substrate.nix with common tools           :p1:
+CLOSED: [2026-02-01]
 :PROPERTIES:
 :EFFORT: S
 :END:
 
 Define the substrate package list and export from flake.
 
-** TODO [AB-001-02] Update schmux to include substrate                   :p1:
+** DONE [AB-001-02] Update schmux to include substrate                   :p1:
+CLOSED: [2026-02-01]
 :PROPERTIES:
 :EFFORT: S
 :END:
 
 Modify orchestrators/schmux/default.nix to compose with substrate.
 
-** TODO [AB-001-03] Create base OCI image with nix                       :p1:
+** DONE [AB-001-03] Create base OCI image with nix                       :p1:
+CLOSED: [2026-02-01]
 :PROPERTIES:
 :EFFORT: M
 :END:
@@ -220,7 +223,8 @@ Use dockerTools.buildImage to create agentboxes-base image with nix + git.
 
 Validate the distrobox workflow: create, enter, nix develop, schmux start.
 
-** TODO [AB-001-05] Port mkProjectShell from cautomaton-develops         :p2:
+** DONE [AB-001-05] Port mkProjectShell from cautomaton-develops         :p2:
+CLOSED: [2026-02-01]
 :PROPERTIES:
 :EFFORT: M
 :END:

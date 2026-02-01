@@ -24,6 +24,7 @@ Each document captures a decision, its rationale, and implementation tasks.
 |-----+--------------------------------+--------|
 | 000 | [[file:000-template.org][Template]]                       | N/A    |
 | 001 | [[file:001-layered-runtime-architecture.org][Layered Runtime Architecture]]   | Active |
+| 002 | [[file:002-composable-agent-environments.org][Composable Agent Environments]]  | Active |
 
 * Elisp Setup
 :PROPERTIES:

@@ -1,0 +1,28 @@
+# Project environment configuration
+#
+# This file defines what tools, runtimes, and AI agents are available
+# in your development environment.
+#
+# Run `nix develop` to enter the environment.
+
+# Orchestrator (optional) - multi-agent coordinator
+# Available: schmux, gastown, openclaw
+[orchestrator]
+name = "schmux"
+
+# AI Agents - set to true to include
+[agents]
+claude = true
+# codex = true
+
+# Language runtimes with version pinning
+[runtimes]
+python = "3.12"
+nodejs = "20"
+# go = "1.23"
+
+# Tool bundles
+# - baseline: 28 essential modern CLI tools
+# - complete: 61 tools (baseline + extras)
+[bundles]
+include = ["complete"]

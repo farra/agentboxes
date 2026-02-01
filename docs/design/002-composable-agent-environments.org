@@ -1,0 +1,396 @@
+#+TITLE: 002 - Composable Agent Environments
+#+AUTHOR: jaaron
+#+STATUS: Active
+#+CATEGORY: architecture
+#+CREATED: [2026-02-01]
+#+LAST_MODIFIED: [2026-02-01]
+#+SETUPFILE: ../../org-setup.org
+
+* Summary
+
+Define a deps.toml configuration pattern that allows users to declaratively specify which orchestrator, agents, and language runtimes they need. This enables self-contained development environments and OCI images with specific agent combinations baked in.
+
+Builds on [[file:001-layered-runtime-architecture.org][001 - Layered Runtime Architecture]] which established substrate and orchestrator layers.
+
+* Motivation
+
+** Current State
+
+Today, agentboxes provides orchestrator shells (schmux, gastown, openclaw) that assume agents (claude, aider, codex) are pre-installed on the host system. This works for:
+
+- Users who already have agents installed globally
+- Simple "just give me the orchestrator" use cases
+
+But it fails for:
+
+- Distrobox/container deployments that need self-contained environments
+- Team onboarding where everyone needs the exact same tooling
+- Remote VM setups where nothing is pre-installed
+- Reproducible builds with pinned agent versions
+
+** Problem
+
+There's no way to say "I want schmux with claude and aider and python 3.12" in a single declarative configuration that works for both local development and container images.
+
+** Goals
+
+1. Single deps.toml file defines the complete environment
+2. Same config works for =nix develop= and OCI image builds
+3. Agents are optional - fall back to host when not specified
+4. Support fast-updating community flakes for agents (not stale nixpkgs)
+
+* Use Cases
+
+** Scenario A: Host Has Agents (Status Quo)
+
+User has claude, aider already installed on their machine.
+
+#+begin_src bash
+# Just get the orchestrator, agents expected on PATH
+nix develop github:farra/agentboxes#schmux
+schmux start
+#+end_src
+
+No deps.toml needed. This continues to work.
+
+** Scenario B: Self-Contained Local Environment
+
+User wants everything in one shell without global agent installs.
+
+#+begin_src bash
+cd my-ai-project
+
+cat > deps.toml << 'EOF'
+[orchestrator]
+name = "schmux"
+
+[agents]
+claude = true
+aider = true
+
+[runtimes]
+python = "3.12"
+EOF
+
+# Option 1: Use agentboxes template
+nix flake init -t github:farra/agentboxes#project
+nix develop
+# Reads deps.toml, composes shell with orchestrator + agents + runtimes
+
+# Option 2: direnv integration
+echo 'use flake' > .envrc
+direnv allow
+#+end_src
+
+** Scenario C: Distrobox/VM Deployment
+
+User is setting up a remote VM or distrobox container.
+
+#+begin_src bash
+cat > deps.toml << 'EOF'
+[orchestrator]
+name = "schmux"
+
+[agents]
+claude = true
+
+[runtimes]
+go = "1.24"
+EOF
+
+# Build OCI image from deps.toml
+nix build .#image
+docker load < result
+
+# Create distrobox
+distrobox create --image my-project:latest --name dev
+distrobox enter dev
+schmux start
+# Claude is available inside the container
+#+end_src
+
+** Scenario D: Team Onboarding
+
+Team shares a repo with their environment defined.
+
+#+begin_src bash
+git clone company/multi-agent-project
+cd multi-agent-project
+
+# deps.toml is committed to the repo
+cat deps.toml
+# [orchestrator]
+# name = "gastown"
+# [agents]
+# claude = true
+# aider = true
+# [runtimes]
+# python = "3.12"
+# go = "1.23"
+
+nix develop
+# Everyone gets the exact same environment
+#+end_src
+
+** Scenario E: Presets (Optional Convenience)
+
+Common combinations shipped as ready-to-use shells.
+
+#+begin_src bash
+nix develop github:farra/agentboxes#preset-schmux-claude
+nix develop github:farra/agentboxes#preset-gastown-full
+#+end_src
+
+These are just pre-made deps.toml combinations.
+
+* Design
+
+** deps.toml Schema
+
+#+begin_src toml
+# Orchestrator (optional - omit for agent-only shell)
+[orchestrator]
+name = "schmux"           # schmux | gastown | openclaw | ralph
+
+# Agents to include (all optional)
+[agents]
+claude = true             # Claude Code CLI
+aider = true              # Aider
+codex = true              # OpenAI Codex CLI
+# Version pinning (optional)
+# claude = "1.0.47"
+
+# Language runtimes (optional)
+[runtimes]
+python = "3.12"
+nodejs = "22"
+go = "1.24"
+rust = "stable"
+
+# Tool bundles from substrate (optional override)
+[bundles]
+include = ["complete"]    # baseline | complete | minimal
+#+end_src
+
+** Architecture
+
+#+begin_example
+┌─────────────────────────────────────────────────────┐
+│                    deps.toml                         │
+│  orchestrator: schmux                                │
+│  agents: [claude, aider]                             │
+│  runtimes: [python 3.12]                             │
+└─────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────┐
+│              mkProjectShell.nix                      │
+│                                                      │
+│  substrate ─────────────────────┐                    │
+│  + schmux (orchestrator)        │                    │
+│  + claude-code (from flake)     ├──► devShell        │
+│  + aider (from nixpkgs/pip)     │                    │
+│  + python 3.12                  │                    │
+└─────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────┐
+│              mkProjectImage.nix                      │
+│  Same composition → OCI image                        │
+└─────────────────────────────────────────────────────┘
+#+end_example
+
+** Tool Bundles
+
+Use the "complete" bundle from cautomaton-develops (61 tools) as the default toolset:
+
+#+begin_example
+baselineTools (28 tools):
+  ripgrep, fd, bat, eza, sd, dust, duf, bottom, difftastic,
+  zoxide, fzf, broot, tree, delta, lazygit, jq, yq-go, csvtk,
+  htmlq, miller, atuin, direnv, just, tealdeer, curlie, glow, entr, pv
+
+completeTools (61 tools): baseline +
+  procs, choose, gh, git-extras, tig, fx, shellcheck, starship, gum,
+  rsync, trash-cli, watchexec, renameutils, curl, wget, httpie,
+  unzip, p7zip, zstd, tmux, watch, less, file, lsof, moreutils,
+  hyperfine, tokei, navi, vhs, freeze, xclip, wl-clipboard, lnav
+#+end_example
+
+** Agent Sources
+
+Use community-maintained flakes that update faster than nixpkgs:
+
+| Agent | Source | Update Frequency |
+|-------|--------|------------------|
+| claude | github:sadjow/claude-code-nix | Hourly |
+| codex | github:sadjow/codex-cli-nix | Hourly |
+
+These become flake inputs:
+
+#+begin_src nix
+inputs = {
+  nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  claude-code.url = "github:sadjow/claude-code-nix";
+  codex-cli.url = "github:sadjow/codex-cli-nix";
+};
+#+end_src
+
+** Relation to Design Doc 001
+
+001 established:
+- =lib/substrate.nix= - Common tools layer
+- =orchestrators/<name>/default.nix= - Orchestrator packages
+- =images/base.nix= - Base OCI image
+
+This design adds:
+- =lib/mkProjectShell.nix= - Compose shell from deps.toml
+- =lib/mkProjectImage.nix= - Compose OCI image from deps.toml
+- =agents/<name>/default.nix= - Agent packages
+- =templates/project/= - Template with flake.nix that reads deps.toml
+
+** File Structure
+
+#+begin_example
+agentboxes/
+├── flake.nix                     # Add agent flake inputs
+├── lib/
+│   ├── substrate.nix             # (existing)
+│   ├── mkProjectShell.nix        # NEW: deps.toml → devShell
+│   └── mkProjectImage.nix        # NEW: deps.toml → OCI image
+├── agents/
+│   ├── claude/
+│   │   └── default.nix           # Wrapper for claude-code-nix
+│   ├── aider/
+│   │   └── default.nix           # Python + aider-chat
+│   └── codex/
+│       └── default.nix           # Wrapper for codex-cli-nix
+├── orchestrators/                # (existing)
+├── templates/
+│   └── project/
+│       ├── flake.nix             # Reads deps.toml
+│       └── deps.toml             # Example config
+└── presets/                      # Optional pre-composed configs
+    ├── schmux-claude.toml
+    └── gastown-full.toml
+#+end_example
+
+* Tasks
+:PROPERTIES:
+:CATEGORY: tasks
+:END:
+
+** DONE [AB-002-01] Add agent flake inputs to flake.nix                :p1:
+CLOSED: [2026-02-01]
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Add claude-code-nix and codex-cli-nix as flake inputs.
+
+** DONE [AB-002-02] Create agents/claude/default.nix                   :p1:
+CLOSED: [2026-02-01]
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Wrapper that uses claude-code-nix input, exports package and shell.
+
+** CANCELLED [AB-002-03] Create agents/aider/default.nix               :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+CANCELLED: Skipping aider for initial implementation. Focus on claude and codex first.
+
+** DONE [AB-002-04] Create agents/codex/default.nix                    :p1:
+CLOSED: [2026-02-01]
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Wrapper that uses codex-cli-nix input, exports package and shell.
+
+** DONE [AB-002-05] Create lib/mkProjectShell.nix                      :p1:
+CLOSED: [2026-02-01]
+:PROPERTIES:
+:EFFORT: L
+:END:
+
+Core function that reads deps.toml and composes a devShell with:
+- Substrate
+- Selected orchestrator (if any)
+- Selected agents
+- Selected language runtimes
+
+** TODO [AB-002-06] Create lib/mkProjectImage.nix                      :p2:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Similar to mkProjectShell but outputs an OCI image via dockerTools.
+
+** DONE [AB-002-07] Create templates/project template                  :p1:
+CLOSED: [2026-02-01]
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Template for =nix flake init -t github:farra/agentboxes#project= that includes:
+- flake.nix that imports agentboxes and reads deps.toml
+- Example deps.toml
+
+** DONE [AB-002-08] Add devShells for agents                           :p1:
+CLOSED: [2026-02-01]
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Export devShells.claude, devShells.aider, devShells.codex for standalone agent use.
+
+** TODO [AB-002-09] Document deps.toml format                          :p2:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Create docs/guides/deps-toml.md with full schema and examples.
+
+** TODO [AB-002-10] Create preset configurations                       :p3:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Add presets/ directory with common combinations like schmux-claude.toml.
+
+* Questions
+:PROPERTIES:
+:CATEGORY: questions
+:END:
+
+** DECIDED How to handle agent authentication?
+:PROPERTIES:
+:DECIDED: [2026-02-01]
+:END:
+
+Document as prerequisite - user runs =claude auth= separately. Punting on secrets config for now; may be a host/provider concern.
+
+** DECIDED Should orchestrators auto-include their preferred agents?
+:PROPERTIES:
+:DECIDED: [2026-02-01]
+:END:
+
+Yes, auto-include for agent-specific orchestrators (ralph→claude). Agent-agnostic orchestrators (schmux, gastown) don't include agents by default.
+
+** DECIDED How to handle aider (Python package)?
+:PROPERTIES:
+:DECIDED: [2026-02-01]
+:END:
+
+Skip aider for initial implementation. Focus on claude and codex first.
+
+** DECIDED Version pinning strategy?
+:PROPERTIES:
+:DECIDED: [2026-02-01]
+:END:
+
+Rely on flake.lock for reproducibility. No explicit version pinning in deps.toml for now.

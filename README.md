@@ -57,13 +57,35 @@ Includes: git, curl, wget, jq, yq, ripgrep, fd, fzf, tree, less, file, openssh, 
 
 | Name | Description | Status | Command |
 |------|-------------|--------|---------|
-| `claude` | Claude Code CLI | Planned | - |
+| `claude` | Claude Code CLI | Available | `nix develop .#claude` |
+| `codex` | OpenAI Codex CLI | Available | `nix develop .#codex` |
 | `aider` | Aider AI pair programming | Planned | - |
-| `opencode` | OpenCode CLI | Planned | - |
 
 See [docs/orchestrators/](docs/orchestrators/) for detailed guides.
 
 ## Usage Patterns
+
+### Project Template (Recommended)
+
+Create a self-contained project with orchestrator + agents + runtimes defined in `deps.toml`:
+
+```bash
+# Initialize a new project
+mkdir my-ai-project && cd my-ai-project
+nix flake init -t github:farra/agentboxes#project
+
+# Edit deps.toml to configure your environment
+cat deps.toml
+# [orchestrator]
+# name = "schmux"
+# [agents]
+# claude = true
+# [runtimes]
+# python = "3.12"
+
+# Enter the composed environment
+nix develop
+```
 
 ### Local Development
 
@@ -109,9 +131,14 @@ distrobox enter agentbox
 agentboxes/
 ├── flake.nix                 # Root flake with packages and devShells
 ├── lib/
-│   └── substrate.nix         # Common tools layer
-├── images/
-│   └── base.nix              # Base OCI image definition
+│   ├── substrate.nix         # Common tools layer
+│   ├── bundles.nix           # Tool bundles (baseline, complete)
+│   └── mkProjectShell.nix    # Compose devShell from deps.toml
+├── agents/
+│   ├── claude/
+│   │   └── default.nix       # Claude Code wrapper
+│   └── codex/
+│       └── default.nix       # Codex CLI wrapper
 ├── orchestrators/
 │   ├── schmux/
 │   │   └── default.nix       # schmux package definition
@@ -119,6 +146,12 @@ agentboxes/
 │   │   └── default.nix       # gastown package definition
 │   └── openclaw/
 │       └── default.nix       # openclaw environment
+├── templates/
+│   └── project/
+│       ├── flake.nix         # Template flake that reads deps.toml
+│       └── deps.toml         # Example configuration
+├── images/
+│   └── base.nix              # Base OCI image definition
 ├── docs/
 │   └── orchestrators/
 │       ├── schmux.md         # Usage guide

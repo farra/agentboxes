@@ -7,36 +7,6 @@ Active tasks checked out from design docs.
 
 ** Active
 
-*** TODO [AB-001-01] Create lib/substrate.nix with common tools          :p1:
-:PROPERTIES:
-:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-01 in 001]]
-:EFFORT: S
-:HANDOFF:
-:WORKED_BY:
-:END:
-
-Define the substrate package list and export from flake.
-
-*** TODO [AB-001-02] Update schmux to include substrate                  :p1:
-:PROPERTIES:
-:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-02 in 001]]
-:EFFORT: S
-:HANDOFF:
-:WORKED_BY:
-:END:
-
-Modify orchestrators/schmux/default.nix to compose with substrate.
-
-*** TODO [AB-001-03] Create base OCI image with nix                      :p1:
-:PROPERTIES:
-:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-03 in 001]]
-:EFFORT: M
-:HANDOFF:
-:WORKED_BY:
-:END:
-
-Use dockerTools.buildImage to create agentboxes-base image with nix + git.
-
 *** TODO [AB-001-04] Test distrobox locally with base image              :p2:
 :PROPERTIES:
 :DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-04 in 001]]
@@ -46,16 +16,6 @@ Use dockerTools.buildImage to create agentboxes-base image with nix + git.
 :END:
 
 Validate the distrobox workflow: create, enter, nix develop, schmux start.
-
-*** TODO [AB-001-05] Port mkProjectShell from cautomaton-develops        :p2:
-:PROPERTIES:
-:DESIGN: [[file:docs/design/001-layered-runtime-architecture.org::*Tasks][AB-001-05 in 001]]
-:EFFORT: M
-:HANDOFF:
-:WORKED_BY:
-:END:
-
-Enable deps.toml to devShell for project-specific configuration.
 
 *** TODO [AB-001-06] Document user journey for local and remote          :p2:
 :PROPERTIES:
@@ -76,6 +36,36 @@ Write docs covering the full workflow from image to running orchestrator.
 :END:
 
 End-to-end validation of remote deployment scenario.
+
+*** TODO [AB-002-06] Create lib/mkProjectImage.nix                       :p2:
+:PROPERTIES:
+:DESIGN: [[file:docs/design/002-composable-agent-environments.org::*Tasks][AB-002-06 in 002]]
+:EFFORT: M
+:HANDOFF:
+:WORKED_BY:
+:END:
+
+Similar to mkProjectShell but outputs an OCI image via dockerTools.
+
+*** TODO [AB-002-09] Document deps.toml format                           :p2:
+:PROPERTIES:
+:DESIGN: [[file:docs/design/002-composable-agent-environments.org::*Tasks][AB-002-09 in 002]]
+:EFFORT: S
+:HANDOFF:
+:WORKED_BY:
+:END:
+
+Create docs/guides/deps-toml.md with full schema and examples.
+
+*** TODO [AB-002-10] Create preset configurations                        :p3:
+:PROPERTIES:
+:DESIGN: [[file:docs/design/002-composable-agent-environments.org::*Tasks][AB-002-10 in 002]]
+:EFFORT: S
+:HANDOFF:
+:WORKED_BY:
+:END:
+
+Add presets/ directory with common combinations like schmux-claude.toml.
 
 ** Blocked
 # Tasks waiting on external dependency

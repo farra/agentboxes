@@ -32,11 +32,11 @@ The user already has [cautomaton-develops](https://github.com/farra/cautomaton-d
 
 ### Individual Agents
 
-| Name | Language | Key Deps |
-|------|----------|----------|
-| claude | Node.js | Claude Code CLI |
-| aider | Python | aider-chat package |
-| opencode | Go | opencode CLI |
+| Name | Language | Key Deps | Status |
+|------|----------|----------|--------|
+| claude | Node.js | Claude Code CLI (via claude-code-nix) | Available |
+| codex | Rust | Codex CLI (via codex-cli-nix) | Available |
+| aider | Python | aider-chat package | Planned |
 
 ## Architecture
 
@@ -46,87 +46,129 @@ The user already has [cautomaton-develops](https://github.com/farra/cautomaton-d
 agentboxes/
 ├── flake.nix                    # Root flake with all outputs
 ├── lib/
-│   └── mkDevShell.nix           # Shared logic from cautomaton-develops
+│   ├── substrate.nix            # Common tools layer (git, jq, rg, etc.)
+│   ├── bundles.nix              # Tool bundles (baseline: 28, complete: 61)
+│   └── mkProjectShell.nix       # Compose devShell from deps.toml
 ├── agents/
 │   ├── claude/
-│   │   ├── flake.nix            # Standalone (works independently)
-│   │   └── deps.toml
-│   ├── aider/
-│   └── opencode/
+│   │   └── default.nix          # Wrapper for claude-code-nix flake
+│   └── codex/
+│       └── default.nix          # Wrapper for codex-cli-nix flake
 ├── orchestrators/
 │   ├── schmux/
-│   │   ├── flake.nix
-│   │   ├── deps.toml
-│   │   └── README.md
+│   │   └── default.nix          # Schmux package + shell
 │   ├── gastown/
-│   └── crewai/
-├── distrobox.ini                # Team manifest
-└── scripts/
-    ├── build-images.sh          # Build all OCI images
-    └── publish.sh               # Push to ghcr.io
+│   │   └── default.nix          # Gastown package + shell
+│   └── openclaw/
+│       └── default.nix          # OpenClaw environment
+├── templates/
+│   └── project/
+│       ├── flake.nix            # Template that reads deps.toml
+│       └── deps.toml            # Example configuration
+├── images/
+│   └── base.nix                 # Base OCI image definition
+└── docs/
+    └── orchestrators/           # Usage guides
 ```
 
 ### Root flake.nix Structure
 
 ```nix
 {
-  outputs = { self, nixpkgs, rust-overlay }: {
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    # Agent flakes (community-maintained, fast-updating)
+    claude-code.url = "github:sadjow/claude-code-nix";
+    codex-cli.url = "github:sadjow/codex-cli-nix";
+  };
+
+  outputs = { self, nixpkgs, flake-utils, claude-code, codex-cli }: {
     # Templates for `nix flake init -t`
-    templates = {
-      schmux = { path = ./orchestrators/schmux; description = "..."; };
-      claude = { path = ./agents/claude; description = "..."; };
-      # ...
-    };
+    templates.project = { path = ./templates/project; description = "..."; };
+
+    # Library functions for downstream projects
+    lib.mkProjectOutputs = depsPath: /* reads deps.toml, returns devShells */;
 
     # DevShells for `nix develop`
     devShells = forAllSystems (system: {
-      schmux = mkDevShell system ./orchestrators/schmux/deps.toml {};
-      claude = mkDevShell system ./agents/claude/deps.toml {};
-      # ...
+      substrate = /* common tools only */;
+      schmux = /* orchestrator + substrate */;
+      gastown = /* orchestrator + substrate */;
+      openclaw = /* orchestrator + substrate */;
+      claude = /* agent + substrate */;
+      codex = /* agent + substrate */;
     });
 
-    # OCI images for `nix build .#<name>-image`
+    # Packages for `nix build`
     packages = forAllSystems (system: {
-      schmux-image = mkImage "schmux" [ go nodejs tmux ];
-      # ...
+      schmux = /* schmux binary */;
+      gastown = /* gastown binary */;
+      claude = /* claude-code package */;
+      codex = /* codex-cli package */;
+      base-image = /* OCI image with substrate */;
     });
   };
 }
 ```
 
-### deps.toml Format (from cautomaton-develops)
+### deps.toml Format
+
+Project environments are configured via `deps.toml`:
 
 ```toml
-[bundles]
-include = ["complete"]  # or ["baseline"]
+# Orchestrator (optional - omit for agent-only environments)
+[orchestrator]
+name = "schmux"  # schmux | gastown | openclaw
 
-[tools]
-go = "1.24"
+# Agents to include (set to true to enable)
+[agents]
+claude = true
+codex = true
+
+# Language runtimes with version pinning
+[runtimes]
 python = "3.12"
 nodejs = "20"
-rust = "stable"
+go = "1.23"
 
-[rust]
-components = ["rustfmt", "clippy"]
+# Tool bundles
+# - baseline: 28 essential modern CLI tools
+# - complete: 61 tools (baseline + extras)
+[bundles]
+include = ["complete"]
 ```
 
-The `mkDevShell.nix` reads this and resolves packages from nixpkgs.
+The `mkProjectShell.nix` reads this and composes a devShell with substrate + orchestrator + agents + runtimes + bundle tools.
 
 ## Build & Test Commands
 
 ```bash
-# Enter a devShell
+# Enter orchestrator shells
 nix develop .#schmux
+nix develop .#gastown
+nix develop .#openclaw
 
-# Build an OCI image
-nix build .#schmux-image
+# Enter agent shells
+nix develop .#claude
+nix develop .#codex
+
+# Create a new project from template
+mkdir my-project && cd my-project
+nix flake init -t .#project
+# Edit deps.toml, then:
+nix develop
+
+# Build packages
+nix build .#schmux
+nix build .#claude
+
+# Build base OCI image
+nix build .#base-image
 docker load < result
 
-# Build all images
-./scripts/build-images.sh
-
-# Publish to registry
-./scripts/publish.sh
+# Validate flake
+nix flake check
 ```
 
 ## Key Design Decisions
@@ -136,14 +178,15 @@ docker load < result
 3. **OCI images built from same Nix definitions** - Single source of truth
 4. **distrobox.ini for non-Nix users** - Lower barrier to entry
 
-## Implementation Priority
+## Implementation Status
 
-1. **Phase 1**: Set up root flake.nix with template/devShell structure
-2. **Phase 2**: Port mkDevShell.nix from cautomaton-develops
-3. **Phase 3**: Add schmux and claude as first environments
-4. **Phase 4**: Add OCI image building
-5. **Phase 5**: Add remaining orchestrators/agents
-6. **Phase 6**: CI/CD for auto-publishing images
+1. **Phase 1**: Set up root flake.nix with template/devShell structure - DONE
+2. **Phase 2**: Create substrate layer and mkProjectShell - DONE
+3. **Phase 3**: Add schmux, gastown, openclaw orchestrators - DONE
+4. **Phase 4**: Add claude and codex agents via external flakes - DONE
+5. **Phase 5**: Create project template with deps.toml composition - DONE
+6. **Phase 6**: Add OCI image building from deps.toml - IN PROGRESS
+7. **Phase 7**: CI/CD for auto-publishing images - PLANNED
 
 ## Reference: cautomaton-develops flake.nix
 
