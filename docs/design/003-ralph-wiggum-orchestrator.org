@@ -1,0 +1,265 @@
+#+TITLE: 003 - Ralph Wiggum Orchestrator
+#+AUTHOR: jaaron
+#+STATUS: Draft
+#+CATEGORY: orchestrator
+#+CREATED: [2026-02-01]
+#+LAST_MODIFIED: [2026-02-01]
+#+SETUPFILE: ../../org-setup.org
+
+* Summary
+
+Add Ralph Wiggum as an orchestrator in agentboxes. Ralph is a bash-based autonomous development loop system for Claude Code that enables continuous, self-improving software development cycles.
+
+Unlike schmux/gastown (which manage multiple agents), Ralph is a single-agent orchestrator focused on running Claude Code autonomously with intelligent exit detection, rate limiting, and circuit breakers.
+
+* Motivation
+
+** What is Ralph?
+
+Ralph Wiggum (named after Geoffrey Huntley's "Ralph technique") automates iterative Claude Code execution:
+
+1. Define requirements in =.ralph/PROMPT.md=
+2. Ralph loops Claude Code with intelligent safeguards
+3. Dual-condition exit detection prevents infinite loops
+4. Rate limiting (100 calls/hour) prevents API overuse
+5. Circuit breaker stops runaway failures
+
+** Why Include It?
+
+- Complements multi-agent orchestrators (schmux, gastown) with focused single-agent automation
+- Popular in Claude Code community (453+ GitHub stars)
+- Well-tested (452 tests, 100% pass rate)
+- Auto-includes claude agent (unlike schmux/gastown which are agent-agnostic)
+
+** Current State
+
+Vendored at =vendor/ralph= from github:frankbria/ralph-claude-code (v0.11.3).
+
+* Design
+
+** Ralph Architecture
+
+#+begin_example
+ralph-claude-code/
+├── ralph_loop.sh          # Main autonomous loop (65KB)
+├── ralph_monitor.sh       # tmux monitoring dashboard
+├── ralph_enable.sh        # Interactive project setup wizard
+├── ralph_import.sh        # PRD/spec converter
+├── install.sh             # Global installer
+├── lib/
+│   ├── circuit_breaker.sh # Three-state circuit breaker
+│   ├── response_analyzer.sh # Claude output parsing
+│   ├── date_utils.sh      # Cross-platform time utils
+│   ├── timeout_utils.sh   # GNU/macOS timeout handling
+│   ├── task_sources.sh    # Task import (beads, GitHub Issues)
+│   └── wizard_utils.sh    # Interactive prompts
+└── templates/             # Project templates
+#+end_example
+
+** Dependencies
+
+Runtime:
+- Bash 4.0+
+- Claude Code CLI (auto-includes claude agent)
+- jq
+- Git
+- tmux (for monitoring)
+- GNU coreutils (timeout/gtimeout)
+
+Testing (dev only):
+- Node.js 18+ (for BATS test framework)
+- bats, bats-support, bats-assert
+
+** Packaging Approach
+
+Unlike schmux/gastown (compiled Go binaries), Ralph is a collection of bash scripts.
+
+Options considered:
+
+1. **Symlink scripts to PATH** - Simple but fragile
+2. **Copy scripts to derivation** - Works but loses git updates
+3. **Wrapper script approach** - Best: wrapper sets PATH to vendored scripts
+
+Recommendation: Option 3 - Create a wrapper that adds =vendor/ralph= to PATH and ensures dependencies are available.
+
+#+begin_src nix
+# orchestrators/ralph/default.nix
+{ pkgs, system, substrate, claude-code-input }:
+
+let
+  # Ralph's runtime dependencies
+  runtimeDeps = with pkgs; [
+    bash
+    jq
+    git
+    tmux
+    coreutils  # timeout
+    gnugrep
+    gnused
+    gawk
+  ];
+
+  # Claude Code from flake input
+  claudeCode = claude-code-input.packages.${system}.default;
+
+  # Wrapper script that sets up environment
+  ralph = pkgs.writeShellScriptBin "ralph" ''
+    export PATH="${pkgs.lib.makeBinPath runtimeDeps}:$PATH"
+    export PATH="${claudeCode}/bin:$PATH"
+    exec ${./../../vendor/ralph}/ralph_loop.sh "$@"
+  '';
+
+  # Additional commands
+  ralphMonitor = pkgs.writeShellScriptBin "ralph-monitor" ''
+    export PATH="${pkgs.lib.makeBinPath runtimeDeps}:$PATH"
+    exec ${./../../vendor/ralph}/ralph_monitor.sh "$@"
+  '';
+
+  ralphEnable = pkgs.writeShellScriptBin "ralph-enable" ''
+    export PATH="${pkgs.lib.makeBinPath runtimeDeps}:$PATH"
+    export PATH="${claudeCode}/bin:$PATH"
+    exec ${./../../vendor/ralph}/ralph_enable.sh "$@"
+  '';
+
+in {
+  package = pkgs.symlinkJoin {
+    name = "ralph";
+    paths = [ ralph ralphMonitor ralphEnable ];
+  };
+
+  shell = pkgs.mkShell {
+    packages = [ ralph ralphMonitor ralphEnable claudeCode ] ++ substrate ++ runtimeDeps;
+    shellHook = ''
+      echo "Ralph Wiggum autonomous Claude runner"
+      echo "Commands: ralph, ralph-monitor, ralph-enable"
+      echo ""
+      echo "Quick start:"
+      echo "  ralph-enable    # Enable Ralph in current project"
+      echo "  ralph --monitor # Start autonomous loop with dashboard"
+    '';
+  };
+}
+#+end_src
+
+** Auto-Include Claude Agent
+
+Per design doc 002, agent-specific orchestrators auto-include their agent:
+
+#+begin_quote
+Yes, auto-include for agent-specific orchestrators (ralph->claude). Agent-agnostic orchestrators (schmux, gastown) don't include agents by default.
+#+end_quote
+
+The ralph shell includes =claudeCode= in its packages, so users get Claude Code automatically.
+
+** deps.toml Integration
+
+When =orchestrator.name = "ralph"= in deps.toml:
+
+1. Include ralph wrapper scripts
+2. Auto-include claude agent (user doesn't need =[agents] claude = true=)
+3. Include ralph's runtime deps (jq, tmux, etc.)
+
+#+begin_src toml
+[orchestrator]
+name = "ralph"
+
+# claude is auto-included, but user can still specify additional agents
+[agents]
+codex = true  # optional: add codex alongside claude
+#+end_src
+
+** Project Workflow
+
+#+begin_example
+# Option 1: Enable in existing project
+cd my-project
+nix develop github:farra/agentboxes#ralph
+ralph-enable
+ralph --monitor
+
+# Option 2: Use deps.toml
+mkdir my-project && cd my-project
+nix flake init -t github:farra/agentboxes#project
+# Edit deps.toml: orchestrator.name = "ralph"
+nix develop
+ralph-enable
+ralph --monitor
+#+end_example
+
+* Tasks
+:PROPERTIES:
+:CATEGORY: tasks
+:END:
+
+** TODO [AB-003-01] Create orchestrators/ralph/default.nix              :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Create the Ralph orchestrator package with wrapper scripts for ralph, ralph-monitor, ralph-enable. Include claude-code automatically.
+
+** TODO [AB-003-02] Update flake.nix with ralph orchestrator            :p1:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Add ralph to the orchestrators map in flake.nix. Export devShells.ralph and packages.ralph.
+
+** TODO [AB-003-03] Update mkProjectShell for ralph auto-include        :p1:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+When orchestrator is "ralph", auto-include claude agent even if not specified in deps.toml.
+
+** TODO [AB-003-04] Test ralph shell end-to-end                         :p2:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Verify: =nix develop .#ralph= -> =ralph-enable= -> =ralph --monitor= works correctly.
+
+** TODO [AB-003-05] Document ralph usage                                :p2:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Create docs/orchestrators/ralph.md with quickstart and configuration reference.
+
+* Questions
+:PROPERTIES:
+:CATEGORY: questions
+:END:
+
+** OPEN Should we vendor ralph or use a flake input?
+
+Current approach vendors ralph as a git submodule. Alternative would be creating a ralph-nix flake (like claude-code-nix).
+
+Pros of vendoring:
+- Simple, no external dependency
+- Can patch if needed
+- Works offline
+
+Cons:
+- Manual updates (git submodule update)
+- Larger repo size
+
+Recommendation: Keep vendoring for now. Consider flake input if ralph gets its own nix packaging upstream.
+
+** OPEN How to handle ralph's install.sh global install?
+
+Ralph's =install.sh= installs to =~/.local/bin= and =~/.ralph/=. In our Nix approach, we don't need this - we provide the scripts directly in the shell.
+
+Decision: Skip ralph's install.sh. Our wrapper scripts make the commands available in the Nix shell. Document that users in the agentboxes shell don't need to run install.sh.
+
+** OPEN Should ralph-setup be included?
+
+Ralph has =ralph-setup= for creating new projects. In our model, users would use =nix flake init -t .#project= then =ralph-enable=.
+
+Decision: Omit ralph-setup initially. The combination of our template + ralph-enable covers the use case.
+
+* References
+
+- [[https://github.com/frankbria/ralph-claude-code][Ralph Wiggum GitHub]]
+- [[https://medium.com/@joe.njenga/ralph-wiggum-claude-code-new-way-to-run-autonomously-for-hours-without-drama-095f47fbd467][Ralph Wiggum Medium Article]]
+- [[file:002-composable-agent-environments.org][002 - Composable Agent Environments]] (auto-include decision)
