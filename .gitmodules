@@ -4,3 +4,6 @@
 [submodule "vendor/schmux"]
 	path = vendor/schmux
 	url = git@github.com:sergeknystautas/schmux.git
+[submodule "vendor/gastown"]
+	path = vendor/gastown
+	url = https://github.com/steveyegge/gastown

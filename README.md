@@ -49,7 +49,7 @@ Includes: git, curl, wget, jq, yq, ripgrep, fd, fzf, tree, less, file, openssh, 
 | Name | Description | Status | Command |
 |------|-------------|--------|---------|
 | `schmux` | Multi-agent tmux orchestrator | Available | `nix develop .#schmux` |
-| `gastown` | Multi-agent workspace manager | Planned | - |
+| `gastown` | Multi-agent convoy orchestrator | Available | `nix develop .#gastown` |
 | `crewai` | Role-playing agent framework | Planned | - |
 
 ### Agents
@@ -112,13 +112,17 @@ agentboxes/
 ├── images/
 │   └── base.nix              # Base OCI image definition
 ├── orchestrators/
-│   └── schmux/
-│       └── default.nix       # schmux package definition
+│   ├── schmux/
+│   │   └── default.nix       # schmux package definition
+│   └── gastown/
+│       └── default.nix       # gastown package definition
 ├── docs/
 │   └── orchestrators/
-│       └── schmux.md         # Usage guide
+│       ├── schmux.md         # Usage guide
+│       └── gastown.md        # Usage guide
 └── vendor/                   # Git submodules for reference
-    └── schmux/
+    ├── schmux/
+    └── gastown/
 ```
 
 ## Server Deployment (EC2/Cloud)

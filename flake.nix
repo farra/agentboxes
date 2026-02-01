@@ -16,6 +16,7 @@
 
         # Import orchestrator packages
         schmux = import ./orchestrators/schmux { inherit pkgs system substrate; };
+        gastown = import ./orchestrators/gastown { inherit pkgs system substrate; };
 
         # Import OCI image builders
         baseImage = import ./images/base.nix { inherit pkgs substrate; };
@@ -24,6 +25,8 @@
         # Packages that can be built
         packages = {
           schmux = schmux.package;
+          gastown = gastown.package;
+          beads = gastown.beads;
           base-image = baseImage;
           default = schmux.package;
         };
@@ -40,6 +43,7 @@
           };
 
           schmux = schmux.shell;
+          gastown = gastown.shell;
           default = schmux.shell;
         };
       }
