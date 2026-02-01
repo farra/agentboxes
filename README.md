@@ -50,6 +50,7 @@ Includes: git, curl, wget, jq, yq, ripgrep, fd, fzf, tree, less, file, openssh, 
 |------|-------------|--------|---------|
 | `schmux` | Multi-agent tmux orchestrator | Available | `nix develop .#schmux` |
 | `gastown` | Multi-agent convoy orchestrator | Available | `nix develop .#gastown` |
+| `openclaw` | Multi-channel AI gateway | Available | `nix develop .#openclaw` |
 | `crewai` | Role-playing agent framework | Planned | - |
 
 ### Agents
@@ -114,15 +115,19 @@ agentboxes/
 ├── orchestrators/
 │   ├── schmux/
 │   │   └── default.nix       # schmux package definition
-│   └── gastown/
-│       └── default.nix       # gastown package definition
+│   ├── gastown/
+│   │   └── default.nix       # gastown package definition
+│   └── openclaw/
+│       └── default.nix       # openclaw environment
 ├── docs/
 │   └── orchestrators/
 │       ├── schmux.md         # Usage guide
-│       └── gastown.md        # Usage guide
+│       ├── gastown.md        # Usage guide
+│       └── openclaw.md       # Usage guide
 └── vendor/                   # Git submodules for reference
     ├── schmux/
-    └── gastown/
+    ├── gastown/
+    └── openclaw/
 ```
 
 ## Server Deployment (EC2/Cloud)

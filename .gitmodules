@@ -7,3 +7,6 @@
 [submodule "vendor/gastown"]
 	path = vendor/gastown
 	url = https://github.com/steveyegge/gastown
+[submodule "vendor/openclaw"]
+	path = vendor/openclaw
+	url = https://github.com/openclaw/openclaw

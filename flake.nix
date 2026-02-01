@@ -17,6 +17,7 @@
         # Import orchestrator packages
         schmux = import ./orchestrators/schmux { inherit pkgs system substrate; };
         gastown = import ./orchestrators/gastown { inherit pkgs system substrate; };
+        openclaw = import ./orchestrators/openclaw { inherit pkgs system substrate; };
 
         # Import OCI image builders
         baseImage = import ./images/base.nix { inherit pkgs substrate; };
@@ -44,6 +45,7 @@
 
           schmux = schmux.shell;
           gastown = gastown.shell;
+          openclaw = openclaw.shell;
           default = schmux.shell;
         };
       }

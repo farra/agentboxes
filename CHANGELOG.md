@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `devShells.gastown` - Gastown environment with gt, beads, sqlite, and substrate tools
 - `packages.gastown` - Build gastown binary standalone
 - `packages.beads` - Build beads (bd) binary standalone
+- **OpenClaw orchestrator** (`orchestrators/openclaw/`) - Multi-channel AI gateway environment
+- `devShells.openclaw` - OpenClaw environment with Node.js 22, pnpm, native build tools, and substrate
 
 ### Changed
 
