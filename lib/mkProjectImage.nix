@@ -255,6 +255,10 @@ in pkgs.dockerTools.buildLayeredImage {
     mkdir -p tmp home root etc var/empty usr/bin usr/sbin sbin
     chmod 1777 tmp
 
+    # Remove any existing symlinks from packages (e.g., shadow provides login.defs)
+    # These point to read-only Nix store paths, so we need to replace them
+    rm -f etc/os-release etc/passwd etc/group etc/shadow etc/gshadow etc/login.defs etc/shells etc/locale.conf 2>/dev/null || true
+
     # /etc/os-release - required by distrobox to identify the container OS
     # Using "debian" as ID tricks distrobox into using apt-get (our stub)
     cat > etc/os-release << 'EOF'
