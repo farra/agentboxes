@@ -213,9 +213,38 @@ in pkgs.dockerTools.buildLayeredImage {
     };
   };
 
-  # Create necessary directories
+  # Create necessary directories and distrobox compatibility files
   extraCommands = ''
-    mkdir -p tmp home root
+    mkdir -p tmp home root etc var/empty
     chmod 1777 tmp
+
+    # /etc/os-release - required by distrobox to identify the container OS
+    cat > etc/os-release << 'EOF'
+ID=nixos
+ID_LIKE=nixos
+NAME="NixOS"
+PRETTY_NAME="Agentbox (NixOS-based)"
+VERSION_ID="unstable"
+HOME_URL="https://github.com/farra/agentboxes"
+EOF
+
+    # /etc/passwd - required for user management
+    cat > etc/passwd << 'EOF'
+root:x:0:0:root:/root:/bin/bash
+nobody:x:65534:65534:Nobody:/var/empty:/bin/false
+EOF
+
+    # /etc/group - required for group management
+    cat > etc/group << 'EOF'
+root:x:0:
+nobody:x:65534:
+EOF
+
+    # /etc/shadow - some tools expect this
+    cat > etc/shadow << 'EOF'
+root:!:1::::::
+nobody:!:1::::::
+EOF
+    chmod 640 etc/shadow
   '';
 }
