@@ -16,125 +16,32 @@ Ralph enables continuous autonomous development by running Claude Code in a loop
 
 Unlike multi-agent orchestrators (schmux, gastown), Ralph focuses on a single Claude agent working autonomously on a project.
 
-## Installation
+## Quick Try
+
+To explore ralph without setting up a project:
 
 ```bash
 nix develop github:farra/agentboxes#ralph
+ralph-enable
+ralph --monitor
 ```
 
 For other deployment options (Docker, distrobox, OCI images), see the [main README](../../README.md#how-to-run-these-environments).
 
-## Getting Started
+## Project Setup
 
-```bash
-# Enable Ralph in a project (interactive wizard)
-ralph-enable
+For real development work, create an `agentbox.toml` in your project that includes the orchestrator, language runtimes, and tools you need.
 
-# Start the autonomous loop with monitoring
-ralph --monitor
-```
+### Example: Reviewing the beads project
 
-## Example: Code Review
-
-This walkthrough demonstrates using Ralph to review [Yegge's beads](https://github.com/steveyegge/beads) repository.
-
-### Step 1: Clone and Enable
+[beads](https://github.com/steveyegge/beads) is a Go project. To review it with ralph, you need Go available so Claude can build and test the code:
 
 ```bash
 git clone https://github.com/steveyegge/beads.git
 cd beads
-ralph-enable
 ```
 
-The wizard will detect the project type and create the `.ralph/` configuration directory.
-
-### Step 2: Configure PROMPT.md
-
-Edit `.ralph/PROMPT.md` to describe the code review task:
-
-```markdown
-# Code Review: Beads Project
-
-## Objective
-Perform a comprehensive code review of this Go-based distributed issue tracker.
-
-## Focus Areas
-1. **Architecture**: Evaluate the overall design and modularity
-2. **Code Quality**: Identify code smells, duplication, and style issues
-3. **Error Handling**: Review error handling patterns and consistency
-4. **Testing**: Assess test coverage and test quality
-5. **Documentation**: Evaluate inline comments and README quality
-
-## Deliverables
-- Create a REVIEW.md file with findings organized by category
-- Prioritize issues by severity (critical, major, minor)
-- Include specific file:line references for each finding
-- Suggest concrete improvements where applicable
-
-## Constraints
-- Do not modify source code files
-- Focus on analysis and documentation only
-- Complete the review in a single session
-```
-
-### Step 3: Configure fix_plan.md
-
-Edit `.ralph/fix_plan.md` to list specific review tasks:
-
-```markdown
-# Code Review Tasks
-
-## High Priority
-- [ ] Review main package structure and entry points
-- [ ] Analyze error handling patterns across the codebase
-- [ ] Assess test coverage and identify gaps
-
-## Medium Priority
-- [ ] Review Go idioms and best practices usage
-- [ ] Check for potential race conditions
-- [ ] Evaluate logging and observability
-
-## Low Priority
-- [ ] Review documentation completeness
-- [ ] Check dependency management
-- [ ] Assess build and CI configuration
-
-## Completed
-```
-
-### Step 4: Start the Review
-
-```bash
-# Start with monitoring dashboard (recommended)
-ralph --monitor
-
-# Or without dashboard
-ralph
-
-# With custom settings
-ralph --calls 50 --timeout 30 --live
-```
-
-### Step 5: Monitor Progress
-
-The dashboard shows:
-- Current iteration number
-- API calls remaining
-- Circuit breaker status
-- Recent Claude output
-
-```bash
-# In a separate terminal
-ralph-monitor
-
-# Or check status
-ralph --status
-ralph --circuit-status
-```
-
-## Using agentbox.toml
-
-For project-based configuration:
+Create `agentbox.toml`:
 
 ```toml
 [orchestrator]
@@ -143,28 +50,91 @@ name = "ralph"
 [bundles]
 include = ["complete"]
 
+[tools]
+go = "1.23"  # beads is written in Go
+
 [llm-agents]
 include = ["claude-code"]
 ```
 
-Then:
+Initialize and enter the environment:
+
 ```bash
 nix flake init -t github:farra/agentboxes#project
-# Edit agentbox.toml as above
 nix develop
+```
+
+Now you have ralph, Go 1.23, Claude Code, and 61 CLI tools. Claude can run `make build` and `make test`.
+
+### Enable ralph
+
+```bash
 ralph-enable
+```
+
+The wizard detects the project type and creates `.ralph/` configuration.
+
+### Configure the review task
+
+Edit `.ralph/PROMPT.md`:
+
+```markdown
+# Code Review: Beads Project
+
+## Objective
+Review this Go codebase for quality, architecture, and test coverage.
+
+## Instructions
+1. Run `make test` to verify tests pass
+2. Analyze code organization and error handling
+3. Check test coverage with `go test -cover ./...`
+4. Create REVIEW.md with findings
+
+## Constraints
+- Do not modify source code
+- Focus on analysis and documentation
+```
+
+Edit `.ralph/fix_plan.md`:
+
+```markdown
+# Review Tasks
+
+- [ ] Run make test and verify all tests pass
+- [ ] Review main package structure
+- [ ] Analyze error handling patterns
+- [ ] Assess test coverage
+- [ ] Document findings in REVIEW.md
+```
+
+### Start the review
+
+```bash
+ralph --monitor
+```
+
+Claude has Go available, so it can actually run the build and tests—not just static analysis.
+
+### Monitor progress
+
+The dashboard shows iteration count, API calls remaining, and circuit breaker status.
+
+```bash
+ralph --status
+ralph --circuit-status
 ```
 
 ## What's Included
 
-The agentboxes environment provides:
+When you use the ralph orchestrator, you get:
 
 - **Claude Code** - Automatically included (Ralph requires it)
 - **ralph** - Main autonomous loop command
 - **ralph-monitor** - Live terminal dashboard
 - **ralph-enable** - Interactive project setup wizard
-- **Runtime deps** - bash, jq, git, tmux, coreutils, grep, sed, awk
-- **Substrate tools** - ripgrep, fd, fzf, htop, curl, rsync, and more
+- **Substrate tools** - git, jq, ripgrep, fd, fzf, tmux, and more
+
+Your `agentbox.toml` adds project-specific tools (Go, Python, Node.js, etc.) so Claude can build and test the code.
 
 ## Project Structure
 
@@ -183,14 +153,12 @@ your-project/
 └── src/               # Your source code
 ```
 
-### Key Files
-
 | File | Purpose | Edit? |
 |------|---------|-------|
-| `PROMPT.md` | Project goals and principles | Yes - customize |
-| `fix_plan.md` | Task checklist | Yes - add tasks |
-| `AGENT.md` | Build/test commands | Rarely - auto-maintained |
-| `.ralphrc` | Configuration | Rarely - sensible defaults |
+| `PROMPT.md` | Project goals and principles | Yes |
+| `fix_plan.md` | Task checklist | Yes |
+| `AGENT.md` | Build/test commands | Rarely |
+| `.ralphrc` | Configuration | Rarely |
 
 ## CLI Reference
 
@@ -204,7 +172,7 @@ ralph-enable --skip-tasks       # Skip task import
 
 ### Running the Loop
 ```bash
-ralph --monitor                 # Start with tmux dashboard (recommended)
+ralph --monitor                 # Start with tmux dashboard
 ralph                           # Start without monitoring
 ralph --calls 50                # Limit to 50 API calls/hour
 ralph --timeout 30              # 30-minute timeout per iteration
@@ -219,11 +187,6 @@ ralph --reset-circuit           # Reset circuit breaker
 ralph --reset-session           # Clear session state
 ```
 
-### Monitoring
-```bash
-ralph-monitor                   # Launch status dashboard
-```
-
 ## Exit Detection
 
 Ralph uses intelligent exit detection to stop the loop:
@@ -232,8 +195,6 @@ Ralph uses intelligent exit detection to stop the loop:
 2. **EXIT_SIGNAL** - Explicit signal from Claude in RALPH_STATUS block
 3. **Circuit Breaker** - Detects stagnation (no file changes, repeated errors)
 4. **Rate Limiting** - Configurable calls per hour (default: 100)
-
-### Dual-Condition Verification
 
 Both conditions must be met to exit:
 - `completion_indicators >= 2` (pattern-based detection)
@@ -276,7 +237,7 @@ claude "hello"
 ### Rate limit reached
 Adjust the calls-per-hour limit:
 ```bash
-ralph --calls 100  # Increase limit
+ralph --calls 100
 ```
 
 ## Links

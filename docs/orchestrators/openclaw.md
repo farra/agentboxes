@@ -10,73 +10,31 @@ OpenClaw is a **messaging gateway** that routes conversations from various platf
 
 **Note**: OpenClaw is best suited for conversational AI tasks rather than autonomous code reviews. For dedicated code review workflows, consider [schmux](schmux.md) or [gastown](gastown.md) instead.
 
-## Installation
+## Quick Try
+
+To explore openclaw without setting up a project:
 
 ```bash
 nix develop github:farra/agentboxes#openclaw
+openclaw onboard --install-daemon
+openclaw gateway run
 ```
 
 For other deployment options (Docker, distrobox, OCI images), see the [main README](../../README.md#how-to-run-these-environments).
 
-## Getting Started
+## Project Setup
+
+For a project where you want OpenClaw available for chat-based assistance, create an `agentbox.toml` that includes the gateway and any tools your project needs.
+
+### Example: TypeScript project with chat support
+
+If you're working on a TypeScript project and want to chat about it via messaging:
 
 ```bash
-# Run the onboarding wizard
-openclaw onboard --install-daemon
-
-# Start the gateway
-openclaw gateway run
+cd my-typescript-project
 ```
 
-## Example: Code Analysis via Chat
-
-While OpenClaw isn't designed for autonomous code orchestration, you can use it to interact with AI agents for code-related questions. This walkthrough shows how to discuss [Yegge's beads](https://github.com/steveyegge/beads) via messaging.
-
-### Step 1: Configure a Channel
-
-Connect your preferred messaging platform:
-
-```bash
-openclaw channels status --probe
-openclaw config set telegram.bot_token "YOUR_BOT_TOKEN"
-```
-
-### Step 2: Clone the Repository Locally
-
-Since OpenClaw doesn't manage workspaces like schmux, clone the repo you want to discuss:
-
-```bash
-git clone https://github.com/steveyegge/beads.git ~/projects/beads
-```
-
-### Step 3: Start the Gateway
-
-```bash
-openclaw gateway run
-```
-
-### Step 4: Chat About Code
-
-Through your connected messaging app, you can now:
-- Ask questions about the beads codebase
-- Request code explanations
-- Discuss architecture decisions
-- Get suggestions for improvements
-
-Example conversation:
-```
-You: Can you explain the architecture of the beads project at ~/projects/beads?
-
-AI: [Analyzes the codebase and provides explanation]
-
-You: What patterns does it use for error handling?
-
-AI: [Provides analysis of error handling patterns]
-```
-
-## Using agentbox.toml
-
-For project-based configuration:
+Create `agentbox.toml`:
 
 ```toml
 [orchestrator]
@@ -86,28 +44,47 @@ name = "openclaw"
 include = ["complete"]
 
 [tools]
-nodejs = "22"
+nodejs = "22"  # OpenClaw requires Node.js 22+
 
 [llm-agents]
 include = ["claude-code"]
 ```
 
-Then:
+Initialize and enter the environment:
+
 ```bash
 nix flake init -t github:farra/agentboxes#project
-# Edit agentbox.toml as above
 nix develop
-openclaw onboard --install-daemon
 ```
+
+Now you have OpenClaw, Node.js 22, Claude Code, and 61 CLI tools.
+
+### Set up the gateway
+
+```bash
+openclaw onboard --install-daemon
+openclaw gateway run
+```
+
+### Configure a messaging channel
+
+```bash
+openclaw channels status --probe
+openclaw config set telegram.bot_token "YOUR_BOT_TOKEN"
+```
+
+Now you can chat about your project via Telegram, ask questions about the code, or get help with development—all from your phone.
 
 ## What's Included
 
-The agentboxes environment provides:
+When you use the openclaw orchestrator, you get:
 
 - **Node.js 22** - Required runtime (>= 22.12.0)
 - **pnpm** - Package manager
 - **Native build tools** - python3, pkg-config, vips, sqlite
 - **Substrate tools** - git, jq, ripgrep, fd, fzf, tmux, htop, curl, rsync, and more
+
+Your `agentbox.toml` can add additional tools for your specific project.
 
 ## Architecture
 
