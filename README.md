@@ -240,6 +240,12 @@ ssh server 'distrobox create --image agentbox:latest --name schmux-box'
 
 **Access**: Use Tailscale for secure private access to dashboards (schmux: `:7337`, etc.)
 
+See the **[Deployment Guide](docs/deployment.md)** for:
+- Publishing images to container registries (ghcr.io, Docker Hub)
+- Team onboarding with distrobox.ini
+- CI/CD workflows for automated image builds
+- Multi-orchestrator server setups
+
 ## Why agentboxes?
 
 - **Reproducible** - Same environment anywhere via `flake.lock`
