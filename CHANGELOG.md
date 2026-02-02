@@ -26,8 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `devShells.codex` - Standalone Codex CLI environment with substrate tools
 - `packages.codex` - Build Codex CLI package standalone
 - **Tool bundles** (`lib/bundles.nix`) - Baseline (28 tools) and complete (61 tools) bundles from cautomaton-develops
-- **mkProjectShell** (`lib/mkProjectShell.nix`) - Compose devShell from deps.toml configuration
-- **Project template** (`templates/project/`) - `nix flake init -t .#project` scaffolds a deps.toml-based environment
+- **mkProjectShell** (`lib/mkProjectShell.nix`) - Compose devShell from agentbox.toml configuration
+- **Project template** (`templates/project/`) - `nix flake init -t .#project` scaffolds an agentbox.toml-based environment
 - **Design doc 002** - Composable Agent Environments architecture
 
 ### Changed

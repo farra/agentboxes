@@ -31,7 +31,7 @@ We need an architecture that:
 #+begin_example
 ┌─────────────────────────────────────────────────────────┐
 │ Layer 4: Project deps (rust, python, node)              │
-│          Source: project's flake.nix or deps.toml      │
+│          Source: project's flake.nix or agentbox.toml      │
 ├─────────────────────────────────────────────────────────┤
 │ Layer 3: Orchestrator (schmux binary + runtime)         │
 │          Source: agentboxes#schmux                      │
@@ -120,10 +120,10 @@ Projects being worked on (via the orchestrator) have their own tooling needs. Tw
 }
 #+end_src
 
-*** Option B: deps.toml (simpler, AI-friendly)
+*** Option B: agentbox.toml (simpler, AI-friendly)
 
 #+begin_src toml
-# project deps.toml
+# project agentbox.toml
 [base]
 include = ["substrate"]  # from agentboxes
 
@@ -132,7 +132,7 @@ rust = "stable"
 nodejs = "20"
 #+end_src
 
-deps.toml is the "per-instance configuration" layer - simpler than flake.nix for common cases.
+agentbox.toml is the "per-instance configuration" layer - simpler than flake.nix for common cases.
 
 ** Configuration Tiers
 
@@ -159,7 +159,7 @@ Distrobox workflow:
 2. =distrobox enter dev=
 3. =nix develop github:farra/agentboxes#schmux= (gets orchestrator + substrate)
 4. =schmux start= (configure repos, spawn agents)
-5. Each workspace can have its own =flake.nix= or =deps.toml=
+5. Each workspace can have its own =flake.nix= or =agentbox.toml=
 
 ** Remote Access
 
@@ -184,7 +184,7 @@ Not in scope for agentboxes itself - we provide the runtime, users provide crede
 Proceed with the layered model:
 - Nix inside distrobox containers (enables dynamic layering)
 - Substrate as shared foundation
-- deps.toml for simple project configuration
+- agentbox.toml for simple project configuration
 - OCI images built via nix dockerTools
 
 * Tasks
@@ -229,7 +229,7 @@ CLOSED: [2026-02-01]
 :EFFORT: M
 :END:
 
-Enable deps.toml → devShell for project-specific configuration.
+Enable agentbox.toml → devShell for project-specific configuration.
 
 ** TODO [AB-001-06] Document user journey for local and remote           :p2:
 :PROPERTIES:
@@ -271,9 +271,9 @@ Decision: Nix dockerTools (native). Single source of truth, no Dockerfile mainte
 
 Use flake.lock pinning (standard nix behavior). Users control updates via =nix flake update=. Stay close to nix, be selective in layers we add.
 
-** DECIDED deps.toml vs flake.nix for projects
+** DECIDED agentbox.toml vs flake.nix for projects
 :PROPERTIES:
 :DECIDED: [2026-02-01]
 :END:
 
-Support both. deps.toml for simpler user configuration of their specific project. flake.nix always available for power users who need full flexibility.
+Support both. agentbox.toml for simpler user configuration of their specific project. flake.nix always available for power users who need full flexibility.

@@ -30,13 +30,13 @@
       templates = {
         project = {
           path = ./templates/project;
-          description = "Project environment with orchestrator, agents, and tools from deps.toml";
+          description = "Project environment with orchestrator, agents, and tools from agentbox.toml";
         };
       };
 
-      # Helper to create project outputs from deps.toml
+      # Helper to create project outputs from agentbox.toml
       # Usage in downstream flakes:
-      #   outputs = { agentboxes, ... }: agentboxes.lib.mkProjectOutputs ./deps.toml;
+      #   outputs = { agentboxes, ... }: agentboxes.lib.mkProjectOutputs ./agentbox.toml;
       mkProjectOutputs = depsPath:
         flake-utils.lib.eachDefaultSystem (system:
           let

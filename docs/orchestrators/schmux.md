@@ -125,9 +125,9 @@ schmux attach <id>   # Attach to tmux session to watch
 
 Or use the dashboard's real-time terminal streaming.
 
-## Using deps.toml
+## Using agentbox.toml
 
-For project-based configuration, create a `deps.toml`:
+For project-based configuration, create a `agentbox.toml`:
 
 ```toml
 [orchestrator]
@@ -143,7 +143,7 @@ include = ["claude-code"]
 Then:
 ```bash
 nix flake init -t github:farra/agentboxes#project
-# Edit deps.toml as above
+# Edit agentbox.toml as above
 nix develop
 schmux start
 ```

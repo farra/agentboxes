@@ -6,5 +6,5 @@
   };
 
   outputs = { self, agentboxes }:
-    agentboxes.lib.mkProjectOutputs ./deps.toml;
+    agentboxes.lib.mkProjectOutputs ./agentbox.toml;
 }
