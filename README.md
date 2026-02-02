@@ -15,10 +15,27 @@ schmux start
 
 The environment disappears when you exit. Great for exploration.
 
-### Option B: Deploy persistently (distrobox)
+### Option B: Deploy persistently (pre-built image + distrobox)
 
 ```bash
-# Build and load the base image
+# Build a pre-built orchestrator image (everything baked in)
+nix build github:farra/agentboxes#schmux-image
+docker load < result
+
+# Create a persistent container
+distrobox create --image agentbox:latest --name schmux-box
+distrobox enter schmux-box
+
+# Just works - no nix develop needed!
+schmux start
+```
+
+Your orchestrator state (tmux sessions, config files, workspaces) survives restarts. Distrobox shares your `$HOME`, so SSH keys and dotfiles just work.
+
+### Option C: Deploy with runtime flexibility (base image + nix develop)
+
+```bash
+# Build the base image (includes nix with flakes)
 nix build github:farra/agentboxes#base-image
 docker load < result
 
@@ -26,22 +43,23 @@ docker load < result
 distrobox create --image agentboxes-base:latest --name dev
 distrobox enter dev
 
-# Inside distrobox: install your orchestrator
+# Install any orchestrator at runtime
 nix develop github:farra/agentboxes#schmux
 schmux start
 ```
 
-Your orchestrator state (tmux sessions, config files, workspaces) survives restarts. Distrobox shares your `$HOME`, so SSH keys and dotfiles just work.
+Use this when you want to switch between orchestrators or need runtime flexibility.
 
 ### When to use which
 
 | Scenario | Approach |
 |----------|----------|
-| Trying an orchestrator | `nix develop` |
-| Comparing orchestrators side-by-side | `nix develop` |
-| Running on a remote server | distrobox |
-| Long-running orchestrator with state | distrobox |
-| Team environment on shared VM | distrobox (one per team member) |
+| Trying an orchestrator | `nix develop` (Option A) |
+| Comparing orchestrators side-by-side | `nix develop` (Option A) |
+| Production deployment | Pre-built image + distrobox (Option B) |
+| Long-running orchestrator with state | Pre-built image + distrobox (Option B) |
+| Need to switch orchestrators at runtime | Base image + distrobox (Option C) |
+| Team environment on shared VM | Pre-built images (one distrobox per member) |
 
 ## Available Environments
 
@@ -101,7 +119,45 @@ include = ["claude-code"]
 Then:
 
 ```bash
+# Ephemeral development
 nix develop
+
+# Or build a pre-baked image for deployment
+nix build .#image
+docker load < result
+distrobox create --image agentbox:latest --name dev
+```
+
+## OCI Images
+
+### Pre-built Orchestrator Images
+
+Each orchestrator has a pre-built image with everything included:
+
+```bash
+nix build github:farra/agentboxes#schmux-image
+nix build github:farra/agentboxes#gastown-image
+nix build github:farra/agentboxes#openclaw-image
+nix build github:farra/agentboxes#ralph-image
+```
+
+### Project-specific Images
+
+Build an image from your `agentbox.toml`:
+
+```bash
+nix build .#image
+docker load < result
+```
+
+The image contains your orchestrator, agents, tools, and bundles - no `nix develop` needed at runtime.
+
+### Base Image
+
+For runtime flexibility, use the base image which includes nix with flakes:
+
+```bash
+nix build github:farra/agentboxes#base-image
 ```
 
 ## agentbox.toml Reference
@@ -165,16 +221,30 @@ Orchestrators are stateful apps (tmux sessions, daemon processes). They work bes
 ┌─────────────────────────────────────────────────┐
 │  EC2 / VM                                       │
 │  ┌───────────────────────────────────────────┐  │
-│  │  distrobox: dev                           │  │
-│  │  └── nix develop .#schmux                 │  │
+│  │  distrobox: schmux-box                    │  │
+│  │  └── schmux (pre-installed via image)     │  │
 │  │      └── schmux daemon + tmux sessions    │  │
 │  └───────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────┘
 ```
 
+Build and deploy:
+```bash
+nix build .#schmux-image
+docker load < result
+docker save agentbox:latest | ssh server 'docker load'
+ssh server 'distrobox create --image agentbox:latest --name schmux-box'
+```
+
 **Sizing**: t3.large (2 vCPU, 8GB) handles 3-6 concurrent agents. Memory-bound, not CPU-bound.
 
 **Access**: Use Tailscale for secure private access to dashboards (schmux: `:7337`, etc.)
+
+See the **[Deployment Guide](docs/deployment.md)** for:
+- Publishing images to container registries (ghcr.io, Docker Hub)
+- Team onboarding with distrobox.ini
+- CI/CD workflows for automated image builds
+- Multi-orchestrator server setups
 
 ## Why agentboxes?
 
@@ -191,7 +261,8 @@ agentboxes/
 ├── lib/
 │   ├── substrate.nix         # Common tools layer
 │   ├── bundles.nix           # Tool bundles (baseline, complete)
-│   └── mkProjectShell.nix    # Compose devShell from agentbox.toml
+│   ├── mkProjectShell.nix    # Compose devShell from agentbox.toml
+│   └── mkProjectImage.nix    # Build OCI image from agentbox.toml
 ├── agents/                   # Agent wrappers (claude, codex, gemini, opencode)
 ├── orchestrators/            # Orchestrator definitions (schmux, gastown, etc.)
 ├── templates/project/        # Template for `nix flake init -t`

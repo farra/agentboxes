@@ -29,11 +29,28 @@ On first run, schmux guides you through configuration. When prompted:
 1. Accept the default workspace directory (`~/schmux-workspaces`) or specify another
 2. Add the beads repository when prompted for repos
 
-### Option B: Using Docker
+### Option B: Using Pre-built Image + Distrobox (Recommended for Persistent Use)
 
 ```bash
-# Build and load the base image
-nix build github:farra/agentboxes#base-image
+# Build the pre-built schmux image (everything included)
+nix build github:farra/agentboxes#schmux-image
+docker load < result
+
+# Create and enter distrobox container
+distrobox create --image agentbox:latest --name schmux-box
+distrobox enter schmux-box
+
+# Just works - schmux is pre-installed!
+schmux start
+```
+
+Distrobox shares your `$HOME`, so SSH keys, dotfiles, and `~/.schmux` config persist across sessions.
+
+### Option C: Using Docker
+
+```bash
+# Build the pre-built schmux image
+nix build github:farra/agentboxes#schmux-image
 docker load < result
 
 # Run interactively with volume mounts for persistence
@@ -41,26 +58,27 @@ docker run -it \
   -v ~/.schmux:/root/.schmux \
   -v ~/schmux-workspaces:/root/schmux-workspaces \
   -p 7337:7337 \
-  agentboxes-base:latest
+  agentbox:latest
 
-# Inside the container, install schmux and start
-curl -fsSL https://raw.githubusercontent.com/sergeknystautas/schmux/main/install.sh | bash
+# schmux is pre-installed
 schmux start
 ```
 
-### Option C: Using Distrobox
+### Option D: Using Base Image + nix develop (Runtime Flexibility)
+
+Use this if you need to switch between orchestrators or install additional tools:
 
 ```bash
-# Build the base image
+# Build the base image (includes nix with flakes)
 nix build github:farra/agentboxes#base-image
 docker load < result
 
-# Create and enter distrobox container
-distrobox create --image agentboxes-base:latest --name schmux-box
-distrobox enter schmux-box
+# Create distrobox
+distrobox create --image agentboxes-base:latest --name dev
+distrobox enter dev
 
-# Inside distrobox, install and run
-curl -fsSL https://raw.githubusercontent.com/sergeknystautas/schmux/main/install.sh | bash
+# Install schmux at runtime
+nix develop github:farra/agentboxes#schmux
 schmux start
 ```
 
