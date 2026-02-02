@@ -8,9 +8,15 @@
     # Agent flakes (community-maintained, fast-updating)
     claude-code.url = "github:sadjow/claude-code-nix";
     codex-cli.url = "github:sadjow/codex-cli-nix";
+
+    # Orchestrator sources (non-flake repos, used as source only)
+    ralph-src = {
+      url = "github:frankbria/ralph-claude-code";
+      flake = false;  # Not a flake, just source files
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, claude-code, codex-cli }:
+  outputs = { self, nixpkgs, flake-utils, claude-code, codex-cli, ralph-src }:
     let
       # System-independent outputs
       templates = {
@@ -34,6 +40,11 @@
               schmux = import ./orchestrators/schmux { inherit pkgs system substrate; };
               gastown = import ./orchestrators/gastown { inherit pkgs system substrate; };
               openclaw = import ./orchestrators/openclaw { inherit pkgs system substrate; };
+              ralph = import ./orchestrators/ralph {
+                inherit pkgs system substrate;
+                claude-code-input = claude-code;
+                ralph-src = ralph-src;
+              };
             };
 
             # Import agents
@@ -76,6 +87,11 @@
         schmux = import ./orchestrators/schmux { inherit pkgs system substrate; };
         gastown = import ./orchestrators/gastown { inherit pkgs system substrate; };
         openclaw = import ./orchestrators/openclaw { inherit pkgs system substrate; };
+        ralph = import ./orchestrators/ralph {
+          inherit pkgs system substrate;
+          claude-code-input = claude-code;
+          ralph-src = ralph-src;
+        };
 
         # Import agent packages
         claude = import ./agents/claude {
@@ -96,6 +112,7 @@
           schmux = schmux.package;
           gastown = gastown.package;
           beads = gastown.beads;
+          ralph = ralph.package;
           claude = claude.package;
           codex = codex.package;
           base-image = baseImage;
@@ -117,6 +134,7 @@
           schmux = schmux.shell;
           gastown = gastown.shell;
           openclaw = openclaw.shell;
+          ralph = ralph.shell;
 
           # Agents (standalone)
           claude = claude.shell;

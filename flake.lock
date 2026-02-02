@@ -140,12 +140,29 @@
         "type": "github"
       }
     },
+    "ralph-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1769978627,
+        "narHash": "sha256-y83P/cKOn29bOS08pbYIG5b66t58gZkplo6BqFMfgJQ=",
+        "owner": "frankbria",
+        "repo": "ralph-claude-code",
+        "rev": "627ad7d9a561acd82105e477fb2bd3ee230d3e6a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "frankbria",
+        "repo": "ralph-claude-code",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "claude-code": "claude-code",
         "codex-cli": "codex-cli",
         "flake-utils": "flake-utils_3",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_3",
+        "ralph-src": "ralph-src"
       }
     },
     "systems": {

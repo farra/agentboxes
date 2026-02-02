@@ -180,6 +180,8 @@ nix flake check
 2. **deps.toml is the user-facing config** - Matches cautomaton-develops pattern
 3. **OCI images built from same Nix definitions** - Single source of truth
 4. **distrobox.ini for non-Nix users** - Lower barrier to entry
+5. **External dependencies via flake inputs** - Community best practice; all orchestrators/agents fetch from upstream (GitHub releases, npm, or flake inputs)
+6. **vendor/ is for REFERENCE ONLY** - The `vendor/` submodules exist for local development reference and reading upstream code. Nix definitions NEVER use vendor/ directly; they always fetch from upstream sources
 
 ## Implementation Status
 

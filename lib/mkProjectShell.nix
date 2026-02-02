@@ -96,14 +96,24 @@ let
   # Resolve agents
   agentNames = builtins.attrNames (deps.agents or {});
   enabledAgents = builtins.filter (name: deps.agents.${name} == true) agentNames;
+
+  # Auto-include agents for agent-specific orchestrators
+  # Ralph always requires Claude Code
+  autoIncludedAgents =
+    if orchestratorName == "ralph" then [ "claude" ]
+    else [];
+
+  # Combine enabled + auto-included (unique to avoid duplicates)
+  allAgents = pkgs.lib.unique (enabledAgents ++ autoIncludedAgents);
+
   agentPackages = builtins.filter (p: p != null) (
-    map (name: (agents.${name} or {}).package or null) enabledAgents
+    map (name: (agents.${name} or {}).package or null) allAgents
   );
 
   # Build description for shellHook
   description = builtins.concatStringsSep " + " (
     (if orchestratorName != null then [ orchestratorName ] else [])
-    ++ (if enabledAgents != [] then [ (builtins.concatStringsSep ", " enabledAgents) ] else [])
+    ++ (if allAgents != [] then [ (builtins.concatStringsSep ", " allAgents) ] else [])
     ++ (if includedBundles != [] then [ "[${builtins.concatStringsSep ", " includedBundles}]" ] else [])
   );
 
