@@ -1,21 +1,18 @@
 # ralph-baked: Ralph on wolfi-toolbox with all tools pre-installed
 #
-# This is a baked image with all tools pre-installed. Larger than slim
-# but ready to use immediately without first-boot setup.
+# Explicit baked image variant. Use ralph.toml (default) instead unless
+# you need the explicit variant marker.
 #
-# Ralph is an autonomous Claude Code runner, so it only includes
-# claude-code as its agent.
-#
-# Trade-offs vs ralph (slim):
-# - Larger image size
-# - No first-boot wait
-# - Still uses wolfi-toolbox base (not fully Nix-reproducible)
-#
-# For fully reproducible Nix images, use ralph-full.toml
+# Ralph is an autonomous Claude Code runner.
 #
 # Build: nix build .#ralph-baked-image
 # Load: docker load < result
 # Use: distrobox create --image ralph-baked:latest --name dev
+
+# Root-level configuration (must come before section headers)
+agents = ["claude-code"]
+bundles = ["baseline"]
+packages = ["python312", "nodejs_22"]
 
 [image]
 name = "ralph-baked"
@@ -25,12 +22,3 @@ variant = "baked"
 
 [orchestrator]
 name = "ralph"
-
-agents = ["claude-code"]
-
-bundles = ["baseline"]
-
-packages = [
-  "python312",
-  "nodejs_22",
-]

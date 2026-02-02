@@ -1,18 +1,16 @@
 # openclaw-baked: OpenClaw on wolfi-toolbox with all tools pre-installed
 #
-# This is a baked image with all tools pre-installed. Larger than slim
-# but ready to use immediately without first-boot setup.
-#
-# Trade-offs vs openclaw (slim):
-# - Larger image size
-# - No first-boot wait
-# - Still uses wolfi-toolbox base (not fully Nix-reproducible)
-#
-# For fully reproducible Nix images, use openclaw-full.toml
+# Explicit baked image variant. Use openclaw.toml (default) instead unless
+# you need the explicit variant marker.
 #
 # Build: nix build .#openclaw-baked-image
 # Load: docker load < result
 # Use: distrobox create --image openclaw-baked:latest --name dev
+
+# Root-level configuration (must come before section headers)
+agents = ["claude-code"]
+bundles = ["baseline"]
+packages = ["nodejs_22", "pnpm"]
 
 [image]
 name = "openclaw-baked"
@@ -22,12 +20,3 @@ variant = "baked"
 
 [orchestrator]
 name = "openclaw"
-
-agents = ["claude-code"]
-
-bundles = ["baseline"]
-
-packages = [
-  "nodejs_22",
-  "pnpm",
-]

@@ -5,16 +5,9 @@
 #
 # Run `nix develop` to enter the environment.
 
-# Image configuration (for OCI image builds)
-# [image]
-# name = "my-project"
-# base = "wolfi"  # wolfi (smaller) or nix (fully reproducible)
-# tag = "latest"
-
-# Orchestrator (optional) - multi-agent coordinator
-# Available: schmux, gastown, openclaw, ralph
-[orchestrator]
-name = "schmux"
+# ============================================================================
+# Root-level configuration (must come before [section] headers)
+# ============================================================================
 
 # AI coding agents (from github:numtide/llm-agents.nix)
 # Available: claude-code, codex, gemini-cli, opencode, amp, goose-cli, aider, etc.
@@ -38,3 +31,18 @@ packages = [
   # "htop",
   # "nur:owner/package",
 ]
+
+# ============================================================================
+# Sections
+# ============================================================================
+
+# Image configuration (for OCI image builds)
+# [image]
+# name = "my-project"
+# base = "wolfi"  # wolfi (smaller) or nix (fully reproducible)
+# tag = "latest"
+
+# Orchestrator (optional) - multi-agent coordinator
+# Available: schmux, gastown, openclaw, ralph
+[orchestrator]
+name = "schmux"

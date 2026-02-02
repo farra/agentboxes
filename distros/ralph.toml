@@ -1,17 +1,19 @@
-# ralph: Ralph autonomous runner environment (slim bootstrap)
+# ralph: Ralph autonomous runner environment
 #
-# This is a slim bootstrap image. On first boot, it automatically runs
-# `just bootstrap` to install the full environment via nix profile.
+# Baked image with all tools pre-installed on wolfi-toolbox base.
+# Ready to use immediately after distrobox create.
 #
 # Ralph is an autonomous Claude Code runner, so it only includes
 # claude-code as its agent.
 #
-# Slim images are smaller (~300MB vs 2GB+) but require first-boot setup.
-# Use ralph-baked.toml for a pre-installed image.
-#
 # Build: nix build .#ralph-image
 # Load: docker load < result
 # Use: distrobox create --image ralph:latest --name dev
+
+# Root-level configuration (must come before section headers)
+agents = ["claude-code"]
+bundles = ["baseline"]
+packages = ["python312", "nodejs_22"]
 
 [image]
 name = "ralph"
@@ -20,12 +22,3 @@ base = "wolfi"
 
 [orchestrator]
 name = "ralph"
-
-agents = ["claude-code"]
-
-bundles = ["baseline"]
-
-packages = [
-  "python312",
-  "nodejs_22",
-]

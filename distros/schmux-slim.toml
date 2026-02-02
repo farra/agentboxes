@@ -11,6 +11,11 @@
 # Load: docker load < result
 # Use: distrobox create --image schmux-slim:latest --name dev
 
+# Root-level configuration (must come before section headers)
+agents = ["claude-code"]
+bundles = ["baseline"]
+packages = ["python312", "nodejs_22"]
+
 [image]
 name = "schmux-slim"
 tag = "latest"
@@ -20,12 +25,3 @@ auto_bootstrap = true
 
 [orchestrator]
 name = "schmux"
-
-agents = ["claude-code"]
-
-bundles = ["baseline"]
-
-packages = [
-  "python312",
-  "nodejs_22",
-]

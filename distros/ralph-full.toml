@@ -1,30 +1,22 @@
 # ralph-full: Full-featured ralph orchestrator environment
 #
-# Ralph is an autonomous Claude Code runner, so it only includes
-# claude-code as its agent. Other runtimes are included for the
-# projects Ralph will work on.
+# Pure Nix base image (~11GB) with fully reproducible builds.
+# Ralph only includes claude-code (required by ralph).
+# Other runtimes are included for the projects Ralph will work on.
 #
-# Includes:
-# - ralph autonomous Claude Code runner
-# - claude-code agent (required by ralph)
-# - Python, Node.js, Go, Rust runtimes
-# - Complete tool bundle (61 tools)
-#
-# Use directly:
-#   nix develop github:farra/agentboxes?dir=distros/ralph-full
-#
-# Or copy to your project:
-#   cp distros/ralph-full.toml ./agentbox.toml
+# Build: nix build .#ralph-full-image
+# Load: docker load < result
+# Use: distrobox create --image ralph-full:latest --name dev
+
+# Root-level configuration (must come before section headers)
+agents = ["claude-code"]
+bundles = ["complete", "rust-stable"]
+packages = ["python312", "nodejs_22", "go_1_24"]
+
+[image]
+name = "ralph-full"
+tag = "latest"
+base = "nix"
 
 [orchestrator]
 name = "ralph"
-
-agents = ["claude-code"]
-
-bundles = ["complete", "rust-stable"]
-
-packages = [
-  "python312",
-  "nodejs_22",
-  "go_1_24",
-]
