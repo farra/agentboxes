@@ -102,6 +102,39 @@ let
   );
 
   # =========================================================================
+  # Distrobox Compatibility (always included in images)
+  # =========================================================================
+
+  # Map distrobox bundle names to actual packages
+  # Some names need special handling (e.g., xorg.xauth is nested)
+  mapDistroboxTool = name:
+    if name == "xorg.xauth" then pkgs.xorg.xauth
+    else pkgs.${name} or null;
+
+  distroboxPackages = builtins.filter (p: p != null) (
+    map mapDistroboxTool bundles.distrobox
+  );
+
+  # Stub package manager script - makes distrobox think packages are installed
+  stubPackageManager = pkgs.writeShellScriptBin "apt-get" ''
+    # Stub package manager for distrobox compatibility
+    # All required packages are pre-installed in this Nix-based image
+    exit 0
+  '';
+
+  # Additional stubs for other package managers distrobox might check
+  stubPackageManagers = [
+    stubPackageManager
+    (pkgs.writeShellScriptBin "dpkg" ''
+      # Stub for distrobox - packages pre-installed
+      case "$1" in
+        -s|--status) exit 0 ;;  # Package status check - pretend installed
+        *) exit 0 ;;
+      esac
+    '')
+  ];
+
+  # =========================================================================
   # Orchestrator
   # =========================================================================
 
@@ -178,6 +211,8 @@ let
     ++ rustPackages
     ++ bundlePackages
     ++ nurPackages
+    ++ distroboxPackages
+    ++ stubPackageManagers
     ++ (with pkgs; [
       # Essential for container operation
       bashInteractive
@@ -204,27 +239,30 @@ in pkgs.dockerTools.buildLayeredImage {
   config = {
     Cmd = [ "/bin/bash" ];
     Env = [
-      "PATH=/bin"
+      "PATH=/bin:/sbin:/usr/bin:/usr/sbin"
       "TERM=xterm-256color"
+      "LANG=en_US.UTF-8"
     ];
     WorkingDir = "/";
     Labels = {
       "org.opencontainers.image.description" = "agentbox: ${description}";
+      "org.opencontainers.image.source" = "https://github.com/farra/agentboxes";
     };
   };
 
   # Create necessary directories and distrobox compatibility files
   extraCommands = ''
-    mkdir -p tmp home root etc var/empty
+    mkdir -p tmp home root etc var/empty usr/bin usr/sbin sbin
     chmod 1777 tmp
 
     # /etc/os-release - required by distrobox to identify the container OS
+    # Using "debian" as ID tricks distrobox into using apt-get (our stub)
     cat > etc/os-release << 'EOF'
-ID=nixos
-ID_LIKE=nixos
-NAME="NixOS"
-PRETTY_NAME="Agentbox (NixOS-based)"
-VERSION_ID="unstable"
+ID=debian
+ID_LIKE=debian
+NAME="Agentbox"
+PRETTY_NAME="Agentbox (Nix-based)"
+VERSION_ID="1.0"
 HOME_URL="https://github.com/farra/agentboxes"
 EOF
 
@@ -238,13 +276,91 @@ EOF
     cat > etc/group << 'EOF'
 root:x:0:
 nobody:x:65534:
+wheel:x:10:
+sudo:x:27:
 EOF
 
-    # /etc/shadow - some tools expect this
+    # /etc/shadow - some tools expect this (writable for useradd)
     cat > etc/shadow << 'EOF'
 root:!:1::::::
 nobody:!:1::::::
 EOF
     chmod 640 etc/shadow
+
+    # /etc/gshadow - group shadow file
+    cat > etc/gshadow << 'EOF'
+root:::
+nobody:::
+wheel:::
+sudo:::
+EOF
+    chmod 640 etc/gshadow
+
+    # /etc/sudoers.d for distrobox to add user sudo access
+    mkdir -p etc/sudoers.d
+    chmod 750 etc/sudoers.d
+
+    # Symlinks for tools in standard locations (distrobox expects /usr/bin)
+    ln -sf /bin/bash usr/bin/bash 2>/dev/null || true
+    ln -sf /bin/env usr/bin/env 2>/dev/null || true
+    ln -sf /bin/sh usr/bin/sh 2>/dev/null || true
+
+    # /etc/login.defs - required by shadow tools (useradd, etc.)
+    cat > etc/login.defs << 'EOF'
+MAIL_DIR        /var/mail
+FAILLOG_ENAB    yes
+LOG_UNKFAIL_ENAB no
+LOG_OK_LOGINS   no
+SYSLOG_SU_ENAB  yes
+SYSLOG_SG_ENAB  yes
+SU_NAME         su
+ENV_SUPATH      PATH=/bin:/sbin:/usr/bin:/usr/sbin
+ENV_PATH        PATH=/bin:/usr/bin
+UID_MIN         1000
+UID_MAX         60000
+GID_MIN         1000
+GID_MAX         60000
+USERGROUPS_ENAB yes
+ENCRYPT_METHOD  SHA512
+EOF
+
+    # /etc/shells - list of valid login shells
+    cat > etc/shells << 'EOF'
+/bin/sh
+/bin/bash
+/usr/bin/bash
+EOF
+
+    # Empty locale files (distrobox reads these)
+    mkdir -p etc/default
+    echo 'LANG=en_US.UTF-8' > etc/locale.conf
+    echo 'LANG="en_US.UTF-8"' > etc/default/locale
+
+    # Welcome banner (shown on login via /etc/motd)
+    cat > etc/motd << 'MOTD'
+
+    ┌─────────────────────────────────────────┐
+    │   ___                  _   ___          │
+    │  / _ | ___ ____ ___  _| |_/ _ )___ __ __│
+    │ / __ |/ _ `/ -_) _ \/ _  _/ _ / _ \\ \ /│
+    │/_/ |_|\_  /\__/_//_/\____|___/\___/_\_\ │
+    │       /___/                             │
+    │                                         │
+    │  Reproducible AI Agent Environments     │
+    │  https://github.com/farra/agentboxes    │
+    └─────────────────────────────────────────┘
+
+MOTD
+
+    # Also show on interactive shell start (for shells that don't read motd)
+    mkdir -p etc/profile.d
+    cat > etc/profile.d/agentbox-welcome.sh << 'PROFILE'
+# Show welcome banner once per session
+if [ -z "$AGENTBOX_WELCOMED" ] && [ -f /etc/motd ]; then
+    cat /etc/motd
+    export AGENTBOX_WELCOMED=1
+fi
+PROFILE
+    chmod +x etc/profile.d/agentbox-welcome.sh
   '';
 }

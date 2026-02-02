@@ -6,6 +6,39 @@
 # These are curated sets of standalone CLI tools that work well together.
 
 {
+  # distrobox: Dependencies required for distrobox container entry
+  # These are automatically included in OCI images built with mkProjectImage.
+  # Distrobox's init script checks for these tools and tries to install them
+  # via package manager if missing. By pre-installing them, we skip that step.
+  #
+  # Note: Some tools map to package names differently:
+  #   - shadow: useradd, passwd, chpasswd
+  #   - util-linux: mount, umount, findmnt, script
+  #   - procps: ps
+  #   - iputils: ping
+  #   - diffutils: diff
+  #   - findutils: find
+  distrobox = [
+    # Compression & archives
+    "bc" "bzip2" "pigz" "zip" "unzip" "gzip" "gnutar"
+    # User management (shadow package)
+    "shadow"
+    # Process & system utilities
+    "procps" "lsof" "util-linux" "time" "hostname"
+    # Filesystem
+    "diffutils" "findutils"
+    # Security & crypto
+    "gnupg" "pinentry-curses" "sudo"
+    # Network
+    "iputils"
+    # X11 (for GUI forwarding)
+    "xorg.xauth"
+    # Documentation
+    "man-db"
+    # Core tools (some overlap with substrate, but explicit for distrobox)
+    "coreutils" "bash" "less" "tree" "curl" "wget" "openssh" "rsync" "gnugrep" "gnused"
+  ];
+
   # baseline: Modern terminal essentials (28 tools)
   # A curated set of standalone CLI tools (no Python/Perl/Ruby runtimes)
   baseline = [
