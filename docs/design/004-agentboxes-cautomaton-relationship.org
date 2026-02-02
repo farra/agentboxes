@@ -15,7 +15,7 @@ reusable library or keep them as separate-but-aligned projects.
 * Motivation
 
 Both projects share similar patterns:
-- =deps.toml= configuration format
+- TOML configuration format (=deps.toml= in cautomaton-develops, =agentbox.toml= in agentboxes)
 - Tool bundles (baseline, complete)
 - =mkDevShell= composition
 - Integration with =llm-agents.nix= and NUR
@@ -61,7 +61,7 @@ environments
 Template users copy              Pre-built shells + template
 and own
 
-deps.toml:                       deps.toml:
+deps.toml:                       agentbox.toml:
   [tools]                          [orchestrator]
   [bundles]                        [llm-agents]
   [llm-agents]                     [bundles]
@@ -89,7 +89,7 @@ Rationale:
 4. Different audiences benefit from different defaults
 
 agentboxes should:
-- Mirror the =deps.toml= pattern from cautomaton-develops
+- Mirror the configuration pattern from cautomaton-develops (using =agentbox.toml=)
 - Use direct =[llm-agents]= section (matching upstream)
 - Add =[orchestrator]= section for AI-specific functionality
 - Provide pre-built shells (=nix develop .#schmux=) that cautomaton-develops doesn't
@@ -99,13 +99,13 @@ agentboxes should:
 :CATEGORY: tasks
 :END:
 
-** TODO [AB-004-01] Align deps.toml format with cautomaton-develops        :p1:
+** TODO [AB-004-01] Align agentbox.toml format with cautomaton-develops    :p1:
 :PROPERTIES:
 :EFFORT: M
 :END:
 
-Update agentboxes =mkProjectShell.nix= to use the same =deps.toml= structure as
-cautomaton-develops:
+Update agentboxes =mkProjectShell.nix= to use a similar =agentbox.toml= structure as
+cautomaton-develops' =deps.toml=:
 - Direct =[llm-agents]= section instead of wrapper
 - Direct =[nur]= section
 - Same bundle names and semantics

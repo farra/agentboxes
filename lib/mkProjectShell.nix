@@ -1,14 +1,14 @@
-# mkProjectShell - Create a devShell from deps.toml
+# mkProjectShell - Create a devShell from agentbox.toml
 #
-# This is the core composition function that reads a deps.toml file and
+# This is the core composition function that reads an agentbox.toml file and
 # produces a devShell with the specified orchestrator, agents, runtimes, and tools.
 #
 # Usage:
 #   mkProjectShell {
 #     inherit pkgs system substrate orchestrators llmAgentsPkgs nurPkgs;
-#   } ./deps.toml
+#   } ./agentbox.toml
 #
-# deps.toml format (aligned with cautomaton-develops):
+# agentbox.toml format:
 #   [orchestrator]      # agentboxes-specific
 #   name = "schmux"
 #
@@ -34,8 +34,8 @@
 depsPath:
 
 let
-  # Parse deps.toml
-  deps = builtins.fromTOML (builtins.readFile depsPath);
+  # Parse agentbox.toml
+  config = builtins.fromTOML (builtins.readFile depsPath);
 
   # Load bundle definitions
   bundles = import ./bundles.nix;
@@ -78,9 +78,9 @@ let
       else builtins.trace "Warning: Unknown tool ${name} ${version}" null;
 
   # Support both old [runtimes] and new [tools] section names
-  toolsSection = deps.tools or deps.runtimes or {};
+  toolsSection = config.tools or config.runtimes or {};
 
-  # Resolve tools from deps.toml (excluding rust)
+  # Resolve tools from agentbox.toml (excluding rust)
   toolPackages = builtins.filter (p: p != null) (
     builtins.attrValues (
       builtins.mapAttrs mapTool toolsSection
@@ -93,7 +93,7 @@ let
 
   getRustToolchain = let
     version = toolsSection.rust or null;
-    components = deps.rust.components or [ "rustfmt" "clippy" ];
+    components = config.rust.components or [ "rustfmt" "clippy" ];
 
     toolchain =
       if version == "stable" then pkgs.rust-bin.stable.latest.default
@@ -114,7 +114,7 @@ let
   # Bundles
   # =========================================================================
 
-  includedBundles = deps.bundles.include or [ "complete" ];
+  includedBundles = config.bundles.include or [ "complete" ];
   bundleToolNames = builtins.concatLists (
     map (name: bundles.${name} or []) includedBundles
   );
@@ -128,7 +128,7 @@ let
   # Orchestrator (agentboxes-specific)
   # =========================================================================
 
-  orchestratorName = deps.orchestrator.name or null;
+  orchestratorName = config.orchestrator.name or null;
   orchestrator = if orchestratorName != null
     then orchestrators.${orchestratorName} or null
     else null;
@@ -141,7 +141,7 @@ let
   # =========================================================================
 
   # New format: [llm-agents] include = ["claude-code"]
-  llmAgentNames = deps.llm-agents.include or [];
+  llmAgentNames = config.llm-agents.include or [];
 
   # Backwards compat: [agents] claude = true -> claude-code
   legacyNameMap = {
@@ -151,7 +151,7 @@ let
     opencode = "opencode";
   };
   legacyAgentNames = map (n: legacyNameMap.${n} or n)
-    (builtins.filter (n: deps.agents.${n} == true) (builtins.attrNames (deps.agents or {})));
+    (builtins.filter (n: config.agents.${n} == true) (builtins.attrNames (config.agents or {})));
 
   # Auto-include agents for agent-specific orchestrators
   # Ralph always requires claude-code
@@ -176,7 +176,7 @@ let
   # =========================================================================
 
   getNurPackages = let
-    specs = deps.nur.include or [];
+    specs = config.nur.include or [];
     parseSpec = spec: let
       parts = builtins.split "/" spec;
       owner = builtins.elemAt parts 0;

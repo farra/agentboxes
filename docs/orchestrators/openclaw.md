@@ -121,7 +121,7 @@ You: What patterns does it use for error handling?
 AI: [Provides analysis of error handling patterns]
 ```
 
-## Using deps.toml
+## Using agentbox.toml
 
 For project-based configuration:
 
@@ -142,7 +142,7 @@ include = ["claude-code"]
 Then:
 ```bash
 nix flake init -t github:farra/agentboxes#project
-# Edit deps.toml as above
+# Edit agentbox.toml as above
 nix develop
 openclaw onboard --install-daemon
 ```

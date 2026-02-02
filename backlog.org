@@ -47,7 +47,7 @@ End-to-end validation of remote deployment scenario.
 
 Similar to mkProjectShell but outputs an OCI image via dockerTools.
 
-*** TODO [AB-002-09] Document deps.toml format                           :p2:
+*** TODO [AB-002-09] Document agentbox.toml format                       :p2:
 :PROPERTIES:
 :DESIGN: [[file:docs/design/002-composable-agent-environments.org::*Tasks][AB-002-09 in 002]]
 :EFFORT: S
@@ -55,7 +55,7 @@ Similar to mkProjectShell but outputs an OCI image via dockerTools.
 :WORKED_BY:
 :END:
 
-Create docs/guides/deps-toml.md with full schema and examples.
+Create docs/guides/agentbox-toml.md with full schema and examples.
 
 *** TODO [AB-002-10] Create preset configurations                        :p3:
 :PROPERTIES:

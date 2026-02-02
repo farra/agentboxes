@@ -183,7 +183,7 @@ ralph --status
 ralph --circuit-status
 ```
 
-## Using deps.toml
+## Using agentbox.toml
 
 For project-based configuration:
 
@@ -201,7 +201,7 @@ include = ["claude-code"]
 Then:
 ```bash
 nix flake init -t github:farra/agentboxes#project
-# Edit deps.toml as above
+# Edit agentbox.toml as above
 nix develop
 ralph-enable
 ```

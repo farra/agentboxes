@@ -17,7 +17,7 @@ This project emerged from exploring how to run multi-agent orchestrators (like s
 - **Best deployment**: EC2/VM per orchestrator, or single VM with distrobox isolation
 - **EC2 sizing**: t3.large (2 vCPU, 8GB) handles 3-6 concurrent agents; memory-bound, not CPU-bound
 
-The user already has [cautomaton-develops](https://github.com/farra/cautomaton-develops) which provides the foundation pattern: `deps.toml` → Nix flake → devShell. This project extends that pattern to a multi-environment monorepo.
+The user already has [cautomaton-develops](https://github.com/farra/cautomaton-develops) which provides the foundation pattern for Nix devShells. This project uses `agentbox.toml` as its configuration format, extending that pattern to a multi-environment monorepo.
 
 ## Target Environments
 
@@ -49,7 +49,7 @@ agentboxes/
 ├── lib/
 │   ├── substrate.nix            # Common tools layer (git, jq, rg, etc.)
 │   ├── bundles.nix              # Tool bundles (baseline: 28, complete: 61)
-│   └── mkProjectShell.nix       # Compose devShell from deps.toml
+│   └── mkProjectShell.nix       # Compose devShell from agentbox.toml
 ├── agents/
 │   ├── claude/
 │   │   └── default.nix          # Wrapper for claude-code-nix flake
@@ -64,8 +64,8 @@ agentboxes/
 │       └── default.nix          # OpenClaw environment
 ├── templates/
 │   └── project/
-│       ├── flake.nix            # Template that reads deps.toml
-│       └── deps.toml            # Example configuration
+│       ├── flake.nix            # Template that reads agentbox.toml
+│       └── agentbox.toml        # Example configuration
 ├── images/
 │   └── base.nix                 # Base OCI image definition
 └── docs/
@@ -89,7 +89,7 @@ agentboxes/
     templates.project = { path = ./templates/project; description = "..."; };
 
     # Library functions for downstream projects
-    lib.mkProjectOutputs = depsPath: /* reads deps.toml, returns devShells */;
+    lib.mkProjectOutputs = configPath: /* reads agentbox.toml, returns devShells */;
 
     # DevShells for `nix develop`
     devShells = forAllSystems (system: {
@@ -113,9 +113,9 @@ agentboxes/
 }
 ```
 
-### deps.toml Format
+### agentbox.toml Format
 
-Project environments are configured via `deps.toml`. This format is aligned with [cautomaton-develops](https://github.com/farra/cautomaton-develops) for consistency:
+Project environments are configured via `agentbox.toml`:
 
 ```toml
 # Orchestrator (optional) - agentboxes-specific
@@ -147,8 +147,9 @@ include = ["claude-code"]
 # include = []
 ```
 
-**Differences from cautomaton-develops:**
-- `[orchestrator]` section (agentboxes-only) - multi-agent coordinators
+**agentbox.toml features:**
+- `[orchestrator]` section - multi-agent coordinators
+- `[llm-agents]` section - AI coding agents from numtide/llm-agents.nix
 - Pre-built devShells (`nix develop .#schmux`, `.#claude`, etc.)
 - OCI image building support
 
@@ -169,7 +170,7 @@ nix develop .#codex
 # Create a new project from template
 mkdir my-project && cd my-project
 nix flake init -t .#project
-# Edit deps.toml, then:
+# Edit agentbox.toml, then:
 nix develop
 
 # Build packages
@@ -187,7 +188,7 @@ nix flake check
 ## Key Design Decisions
 
 1. **Each orchestrator/agent has a standalone flake.nix** - Can be used independently or via the root flake
-2. **deps.toml is the user-facing config** - Matches cautomaton-develops pattern
+2. **agentbox.toml is the user-facing config** - Simple TOML configuration for environments
 3. **OCI images built from same Nix definitions** - Single source of truth
 4. **distrobox.ini for non-Nix users** - Lower barrier to entry
 5. **External dependencies via flake inputs** - Community best practice; all orchestrators/agents fetch from upstream (GitHub releases, npm, or flake inputs)
@@ -199,8 +200,8 @@ nix flake check
 2. **Phase 2**: Create substrate layer and mkProjectShell - DONE
 3. **Phase 3**: Add schmux, gastown, openclaw orchestrators - DONE
 4. **Phase 4**: Add claude and codex agents via external flakes - DONE
-5. **Phase 5**: Create project template with deps.toml composition - DONE
-6. **Phase 6**: Add OCI image building from deps.toml - IN PROGRESS
+5. **Phase 5**: Create project template with agentbox.toml composition - DONE
+6. **Phase 6**: Add OCI image building from agentbox.toml - IN PROGRESS
 7. **Phase 7**: CI/CD for auto-publishing images - PLANNED
 
 ## Reference: cautomaton-develops flake.nix
@@ -208,7 +209,7 @@ nix flake check
 The user's existing project at `~/dev/me/cautomaton-develops` has the core pattern. Key files:
 
 - `template/flake.nix` - Full devShell implementation with tool bundles, version mapping
-- `template/deps.toml` - Example config format
+- `template/deps.toml` - Example config format (note: agentboxes uses `agentbox.toml`)
 - Root `flake.nix` - Just defines `templates.default`
 
 The implementation includes:

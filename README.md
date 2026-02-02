@@ -45,14 +45,14 @@ nix develop github:farra/agentboxes#substrate
 
 ## Creating a Project
 
-The recommended way to use agentboxes is to create a project with a `deps.toml` file:
+The recommended way to use agentboxes is to create a project with an `agentbox.toml` file:
 
 ```bash
 mkdir my-ai-project && cd my-ai-project
 nix flake init -t github:farra/agentboxes#project
 ```
 
-This creates a `flake.nix` and `deps.toml`. Edit `deps.toml` to configure your environment:
+This creates a `flake.nix` and `agentbox.toml`. Edit `agentbox.toml` to configure your environment:
 
 ```toml
 # Orchestrator (optional) - multi-agent coordinator
@@ -90,7 +90,7 @@ Then enter the environment:
 nix develop
 ```
 
-## deps.toml Reference
+## agentbox.toml Reference
 
 ### [orchestrator]
 
@@ -221,7 +221,7 @@ agentboxes/
 ├── lib/
 │   ├── substrate.nix         # Common tools layer
 │   ├── bundles.nix           # Tool bundles (baseline, complete)
-│   └── mkProjectShell.nix    # Compose devShell from deps.toml
+│   └── mkProjectShell.nix    # Compose devShell from agentbox.toml
 ├── agents/                   # Agent wrappers (claude, codex, gemini, opencode)
 ├── orchestrators/            # Orchestrator definitions (schmux, gastown, etc.)
 ├── templates/project/        # Template for `nix flake init -t`

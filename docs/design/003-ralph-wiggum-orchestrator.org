@@ -151,9 +151,9 @@ Yes, auto-include for agent-specific orchestrators (ralph->claude). Agent-agnost
 
 The ralph shell includes =claudeCode= in its packages, so users get Claude Code automatically.
 
-** deps.toml Integration
+** agentbox.toml Integration
 
-When =orchestrator.name = "ralph"= in deps.toml:
+When =orchestrator.name = "ralph"= in agentbox.toml:
 
 1. Include ralph wrapper scripts
 2. Auto-include claude agent (user doesn't need =[agents] claude = true=)
@@ -177,10 +177,10 @@ nix develop github:farra/agentboxes#ralph
 ralph-enable
 ralph --monitor
 
-# Option 2: Use deps.toml
+# Option 2: Use agentbox.toml
 mkdir my-project && cd my-project
 nix flake init -t github:farra/agentboxes#project
-# Edit deps.toml: orchestrator.name = "ralph"
+# Edit agentbox.toml: orchestrator.name = "ralph"
 nix develop
 ralph-enable
 ralph --monitor
@@ -210,7 +210,7 @@ Add ralph to the orchestrators map in flake.nix. Export devShells.ralph and pack
 :EFFORT: S
 :END:
 
-When orchestrator is "ralph", auto-include claude agent even if not specified in deps.toml.
+When orchestrator is "ralph", auto-include claude agent even if not specified in agentbox.toml.
 
 ** DONE [AB-003-04] Test ralph shell end-to-end                         :p2:
 :PROPERTIES:

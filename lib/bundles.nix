@@ -1,7 +1,7 @@
 # Tool Bundles
 #
 # Pre-defined collections of commonly useful development tools.
-# Include them via deps.toml: [bundles] include = ["baseline"]
+# Include them via agentbox.toml: [bundles] include = ["baseline"]
 #
 # These are curated sets of standalone CLI tools that work well together.
 

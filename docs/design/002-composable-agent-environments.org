@@ -8,7 +8,7 @@
 
 * Summary
 
-Define a deps.toml configuration pattern that allows users to declaratively specify which orchestrator, agents, and language runtimes they need. This enables self-contained development environments and OCI images with specific agent combinations baked in.
+Define a agentbox.toml configuration pattern that allows users to declaratively specify which orchestrator, agents, and language runtimes they need. This enables self-contained development environments and OCI images with specific agent combinations baked in.
 
 Builds on [[file:001-layered-runtime-architecture.org][001 - Layered Runtime Architecture]] which established substrate and orchestrator layers.
 
@@ -34,7 +34,7 @@ There's no way to say "I want schmux with claude and codex and python 3.12" in a
 
 ** Goals
 
-1. Single deps.toml file defines the complete environment
+1. Single agentbox.toml file defines the complete environment
 2. Same config works for =nix develop= and OCI image builds
 3. Agents are optional - fall back to host when not specified
 4. Support fast-updating community flakes for agents (not stale nixpkgs)
@@ -51,7 +51,7 @@ nix develop github:farra/agentboxes#schmux
 schmux start
 #+end_src
 
-No deps.toml needed. This continues to work.
+No agentbox.toml needed. This continues to work.
 
 ** Scenario B: Self-Contained Local Environment
 
@@ -60,7 +60,7 @@ User wants everything in one shell without global agent installs.
 #+begin_src bash
 cd my-ai-project
 
-cat > deps.toml << 'EOF'
+cat > agentbox.toml << 'EOF'
 [orchestrator]
 name = "schmux"
 
@@ -75,7 +75,7 @@ EOF
 # Option 1: Use agentboxes template
 nix flake init -t github:farra/agentboxes#project
 nix develop
-# Reads deps.toml, composes shell with orchestrator + agents + runtimes
+# Reads agentbox.toml, composes shell with orchestrator + agents + runtimes
 
 # Option 2: direnv integration
 echo 'use flake' > .envrc
@@ -87,7 +87,7 @@ direnv allow
 User is setting up a remote VM or distrobox container.
 
 #+begin_src bash
-cat > deps.toml << 'EOF'
+cat > agentbox.toml << 'EOF'
 [orchestrator]
 name = "schmux"
 
@@ -98,7 +98,7 @@ claude = true
 go = "1.24"
 EOF
 
-# Build OCI image from deps.toml
+# Build OCI image from agentbox.toml
 nix build .#image
 docker load < result
 
@@ -117,8 +117,8 @@ Team shares a repo with their environment defined.
 git clone company/multi-agent-project
 cd multi-agent-project
 
-# deps.toml is committed to the repo
-cat deps.toml
+# agentbox.toml is committed to the repo
+cat agentbox.toml
 # [orchestrator]
 # name = "gastown"
 # [agents]
@@ -141,11 +141,11 @@ nix develop github:farra/agentboxes#preset-schmux-claude
 nix develop github:farra/agentboxes#preset-gastown-full
 #+end_src
 
-These are just pre-made deps.toml combinations.
+These are just pre-made agentbox.toml combinations.
 
 * Design
 
-** deps.toml Schema
+** agentbox.toml Schema
 
 #+begin_src toml
 # Orchestrator (optional - omit for agent-only shell)
@@ -177,7 +177,7 @@ include = ["complete"]    # baseline | complete | minimal
 
 #+begin_example
 ┌─────────────────────────────────────────────────────┐
-│                    deps.toml                         │
+│                    agentbox.toml                         │
 │  orchestrator: schmux                                │
 │  agents: [claude, codex]                             │
 │  runtimes: [python 3.12]                             │
@@ -245,10 +245,10 @@ inputs = {
 - =images/base.nix= - Base OCI image
 
 This design adds:
-- =lib/mkProjectShell.nix= - Compose shell from deps.toml
-- =lib/mkProjectImage.nix= - Compose OCI image from deps.toml
+- =lib/mkProjectShell.nix= - Compose shell from agentbox.toml
+- =lib/mkProjectImage.nix= - Compose OCI image from agentbox.toml
 - =agents/<name>/default.nix= - Agent packages
-- =templates/project/= - Template with flake.nix that reads deps.toml
+- =templates/project/= - Template with flake.nix that reads agentbox.toml
 
 ** File Structure
 
@@ -257,8 +257,8 @@ agentboxes/
 ├── flake.nix                     # Add agent flake inputs
 ├── lib/
 │   ├── substrate.nix             # (existing)
-│   ├── mkProjectShell.nix        # NEW: deps.toml → devShell
-│   └── mkProjectImage.nix        # NEW: deps.toml → OCI image
+│   ├── mkProjectShell.nix        # NEW: agentbox.toml → devShell
+│   └── mkProjectImage.nix        # NEW: agentbox.toml → OCI image
 ├── agents/
 │   ├── claude/
 │   │   └── default.nix           # Wrapper for claude-code-nix
@@ -271,8 +271,8 @@ agentboxes/
 ├── orchestrators/                # (existing)
 ├── templates/
 │   └── project/
-│       ├── flake.nix             # Reads deps.toml
-│       └── deps.toml             # Example config
+│       ├── flake.nix             # Reads agentbox.toml
+│       └── agentbox.toml             # Example config
 └── presets/                      # Optional pre-composed configs
     ├── schmux-claude.toml
     └── gastown-full.toml
@@ -320,7 +320,7 @@ CLOSED: [2026-02-01]
 :EFFORT: L
 :END:
 
-Core function that reads deps.toml and composes a devShell with:
+Core function that reads agentbox.toml and composes a devShell with:
 - Substrate
 - Selected orchestrator (if any)
 - Selected agents
@@ -340,8 +340,8 @@ CLOSED: [2026-02-01]
 :END:
 
 Template for =nix flake init -t github:farra/agentboxes#project= that includes:
-- flake.nix that imports agentboxes and reads deps.toml
-- Example deps.toml
+- flake.nix that imports agentboxes and reads agentbox.toml
+- Example agentbox.toml
 
 ** DONE [AB-002-08] Add devShells for agents                           :p1:
 CLOSED: [2026-02-01]
@@ -351,7 +351,7 @@ CLOSED: [2026-02-01]
 
 Export devShells.claude, devShells.codex (and gemini, opencode when implemented) for standalone agent use.
 
-** TODO [AB-002-09] Document deps.toml format                          :p2:
+** TODO [AB-002-09] Document agentbox.toml format                          :p2:
 :PROPERTIES:
 :EFFORT: S
 :END:
@@ -396,4 +396,4 @@ Dropping aider from scope. Focus on claude, codex, gemini, and opencode.
 :DECIDED: [2026-02-01]
 :END:
 
-Rely on flake.lock for reproducibility. No explicit version pinning in deps.toml for now.
+Rely on flake.lock for reproducibility. No explicit version pinning in agentbox.toml for now.
