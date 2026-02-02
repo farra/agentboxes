@@ -12,6 +12,11 @@
 # Build with: nix build .#image
 # Load with: docker load < result
 # Use with distrobox: distrobox create --image <name>:latest --name dev
+#
+# Base image options (in agentbox.toml):
+#   [image]
+#   base = "wolfi"  # Use ublue wolfi-toolbox as base (smaller, faster)
+#   base = "nix"    # Pure Nix image (default, larger but fully reproducible)
 
 { pkgs, system, substrate ? [], orchestrators ? {}, llmAgentsPkgs ? {}, nurPkgs ? null }:
 
@@ -20,6 +25,23 @@ depsPath:
 let
   # Parse agentbox.toml
   config = builtins.fromTOML (builtins.readFile depsPath);
+
+  # =========================================================================
+  # Base Image Selection
+  # =========================================================================
+
+  imageBase = config.image.base or "nix";
+  useWolfiBase = imageBase == "wolfi";
+
+  # Wolfi-toolbox base image (distrobox-ready, glibc, ~200MB)
+  # From ublue-os - the Bazzite/Bluefin folks who know immutable distros
+  wolfiBaseImage = pkgs.dockerTools.pullImage {
+    imageName = "ghcr.io/ublue-os/wolfi-toolbox";
+    imageDigest = "sha256:28d85a31e854751401264d88c2a337e4081eb56b217f89804d5b44b05aaa7654";
+    sha256 = "sha256-yW6TvaqpSSV1hZi4OOot+hV2W7VYgaOHszv2stm9aZ8=";
+    finalImageName = "wolfi-toolbox";
+    finalImageTag = "latest";
+  };
 
   # Load bundle definitions
   bundles = import ./bundles.nix;
@@ -102,7 +124,7 @@ let
   );
 
   # =========================================================================
-  # Distrobox Compatibility (always included in images)
+  # Distrobox Compatibility (only for pure Nix images)
   # =========================================================================
 
   # Map distrobox bundle names to actual packages
@@ -111,9 +133,11 @@ let
     if name == "xorg.xauth" then pkgs.xorg.xauth
     else pkgs.${name} or null;
 
-  distroboxPackages = builtins.filter (p: p != null) (
-    map mapDistroboxTool bundles.distrobox
-  );
+  # Only include distrobox packages for pure Nix base (wolfi already has them)
+  distroboxPackages = if useWolfiBase then [] else
+    builtins.filter (p: p != null) (
+      map mapDistroboxTool bundles.distrobox
+    );
 
   # Stub package manager script - makes distrobox think packages are installed
   stubPackageManager = pkgs.writeShellScriptBin "apt-get" ''
@@ -123,7 +147,8 @@ let
   '';
 
   # Additional stubs for other package managers distrobox might check
-  stubPackageManagers = [
+  # Only needed for pure Nix base (wolfi has real apk)
+  stubPackageManagers = if useWolfiBase then [] else [
     stubPackageManager
     (pkgs.writeShellScriptBin "dpkg" ''
       # Stub for distrobox - packages pre-installed
@@ -202,9 +227,20 @@ let
   imageName = config.image.name or "agentbox";
   imageTag = config.image.tag or "latest";
 
+  # Essential packages for pure Nix base (wolfi already has these)
+  essentialPackages = if useWolfiBase then [] else (with pkgs; [
+    bashInteractive
+    coreutils
+    gnugrep
+    gnused
+    which
+  ]);
+
   # All packages to include in the image
+  # When using wolfi base, we skip substrate basics and distrobox deps
+  # since wolfi-toolbox already provides them
   allPackages = builtins.filter (p: p != null) (
-    substrate
+    (if useWolfiBase then [] else substrate)
     ++ orchestratorPackages
     ++ agentPackages
     ++ toolPackages
@@ -213,19 +249,13 @@ let
     ++ nurPackages
     ++ distroboxPackages
     ++ stubPackageManagers
-    ++ (with pkgs; [
-      # Essential for container operation
-      bashInteractive
-      coreutils
-      gnugrep
-      gnused
-      which
-    ])
+    ++ essentialPackages
   );
 
   # Description for logging
   description = builtins.concatStringsSep " + " (
-    (if orchestratorName != null then [ orchestratorName ] else [])
+    (if useWolfiBase then [ "wolfi" ] else [ "nix" ])
+    ++ (if orchestratorName != null then [ orchestratorName ] else [])
     ++ (if allAgentNames != [] then [ (builtins.concatStringsSep ", " allAgentNames) ] else [])
     ++ (if includedBundles != [] then [ "[${builtins.concatStringsSep ", " includedBundles}]" ] else [])
   );
@@ -234,12 +264,18 @@ in pkgs.dockerTools.buildLayeredImage {
   name = imageName;
   tag = imageTag;
 
+  # Use wolfi-toolbox as base when configured, otherwise build from scratch
+  fromImage = if useWolfiBase then wolfiBaseImage else null;
+
   contents = allPackages;
 
   config = {
-    Cmd = [ "/bin/bash" ];
+    # Wolfi uses /usr/bin/bash, pure Nix uses /bin/bash
+    Cmd = if useWolfiBase then [ "/usr/bin/bash" ] else [ "/bin/bash" ];
     Env = [
-      "PATH=/bin:/sbin:/usr/bin:/usr/sbin"
+      # Wolfi has /usr/bin structure, pure Nix uses /bin
+      # Include both to ensure tools are found regardless of base
+      "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
       "TERM=xterm-256color"
       "LANG=en_US.UTF-8"
     ];
@@ -247,11 +283,34 @@ in pkgs.dockerTools.buildLayeredImage {
     Labels = {
       "org.opencontainers.image.description" = "agentbox: ${description}";
       "org.opencontainers.image.source" = "https://github.com/farra/agentboxes";
+      "org.opencontainers.image.base" = if useWolfiBase then "wolfi-toolbox" else "nix";
     };
   };
 
   # Create necessary directories and distrobox compatibility files
-  extraCommands = ''
+  # For wolfi base, most of this is already handled - we just add Nix bin symlinks
+  extraCommands = if useWolfiBase then ''
+    # Wolfi base already has distrobox compatibility set up
+    # Just ensure Nix-installed binaries are accessible
+    mkdir -p usr/local/bin
+
+    # Add welcome banner
+    cat > etc/motd << 'MOTD'
+
+    ┌─────────────────────────────────────────┐
+    │   ___                  _   ___          │
+    │  / _ | ___ ____ ___  _| |_/ _ )___ __ __│
+    │ / __ |/ _ `/ -_) _ \/ _  _/ _ / _ \\ \ /│
+    │/_/ |_|\_  /\__/_//_/\____|___/\___/_\_\ │
+    │       /___/                             │
+    │                                         │
+    │  Reproducible AI Agent Environments     │
+    │  wolfi-toolbox base + Nix packages      │
+    │  https://github.com/farra/agentboxes    │
+    └─────────────────────────────────────────┘
+
+MOTD
+  '' else ''
     mkdir -p tmp home root etc var/empty usr/bin usr/sbin sbin
     chmod 1777 tmp
 

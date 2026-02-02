@@ -172,10 +172,14 @@
           base-image = baseImage;
 
           # Pre-built orchestrator images (from distros/)
+          # Full images (pure Nix, ~11GB, fully reproducible)
           schmux-image = mkProjectImage ./distros/schmux-full.toml;
           gastown-image = mkProjectImage ./distros/gastown-full.toml;
           openclaw-image = mkProjectImage ./distros/openclaw-full.toml;
           ralph-image = mkProjectImage ./distros/ralph-full.toml;
+
+          # Wolfi-based images (wolfi-toolbox base, ~500MB-2GB, faster)
+          schmux-wolfi-image = mkProjectImage ./distros/schmux-wolfi.toml;
 
           default = schmux.package;
         };
