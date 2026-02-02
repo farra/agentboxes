@@ -19,17 +19,12 @@
 [orchestrator]
 name = "ralph"
 
-[bundles]
-include = ["complete"]
+agents = ["claude-code"]
 
-[tools]
-python = "3.12"
-nodejs = "22"
-go = "1.24"
-rust = "stable"
+bundles = ["complete", "rust-stable"]
 
-[rust]
-components = ["rustfmt", "clippy"]
-
-[llm-agents]
-include = ["claude-code"]
+packages = [
+  "python312",
+  "nodejs_22",
+  "go_1_24",
+]

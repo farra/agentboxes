@@ -19,13 +19,12 @@ base = "wolfi"
 [orchestrator]
 name = "schmux"
 
+agents = ["claude-code"]
+
 # Using baseline bundle - wolfi already has basic tools
-[bundles]
-include = ["baseline"]
+bundles = ["baseline"]
 
-[tools]
-python = "3.12"
-nodejs = "22"
-
-[llm-agents]
-include = ["claude-code"]
+packages = [
+  "python312",
+  "nodejs_22",
+]

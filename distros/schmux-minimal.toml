@@ -1,0 +1,29 @@
+# schmux-minimal: Bare minimum schmux on wolfi
+#
+# Contains ONLY:
+# - wolfi-toolbox base (distrobox-ready)
+# - schmux orchestrator
+# - claude-code agent
+#
+# NO language runtimes, NO extra tools.
+# Agents use `apk add` at runtime to install what they need.
+#
+# Size target: < 1GB
+#
+# Build: nix build .#schmux-minimal-image
+
+[image]
+name = "schmux-minimal"
+tag = "latest"
+base = "wolfi"
+
+[orchestrator]
+name = "schmux"
+
+agents = ["claude-code"]
+
+# No bundles - wolfi has basics, agents install what they need
+bundles = []
+
+# No pre-installed runtimes - agents install via apk
+packages = []

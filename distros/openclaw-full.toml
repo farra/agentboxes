@@ -15,17 +15,12 @@
 [orchestrator]
 name = "openclaw"
 
-[bundles]
-include = ["complete"]
+agents = ["claude-code", "gemini-cli", "codex", "opencode"]
 
-[tools]
-python = "3.12"
-nodejs = "22"
-go = "1.24"
-rust = "stable"
+bundles = ["complete", "rust-stable"]
 
-[rust]
-components = ["rustfmt", "clippy"]
-
-[llm-agents]
-include = ["claude-code", "gemini-cli", "codex", "opencode"]
+packages = [
+  "python312",
+  "nodejs_22",
+  "go_1_24",
+]

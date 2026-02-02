@@ -118,42 +118,49 @@ agentboxes/
 Project environments are configured via `agentbox.toml`:
 
 ```toml
+# Image configuration (for OCI image builds)
+[image]
+name = "my-project"
+base = "wolfi"    # wolfi (smaller) or nix (fully reproducible)
+tag = "latest"
+
 # Orchestrator (optional) - agentboxes-specific
 [orchestrator]
-name = "schmux"  # schmux | gastown | openclaw | ralph
-
-# Tool bundles
-[bundles]
-include = ["complete"]  # baseline (28 tools) or complete (61 tools)
-
-# Language runtimes and tools
-[tools]
-python = "3.12"
-nodejs = "20"
-# go = "1.23"
-# rust = "stable"  # "stable", "beta", "nightly", or "1.75.0"
-
-# Rust components (when rust is enabled)
-# [rust]
-# components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]
+name = "schmux"   # schmux | gastown | openclaw | ralph
 
 # AI coding agents from llm-agents.nix
-[llm-agents]
-include = ["claude-code"]
+agents = ["claude-code"]
 # Available: claude-code, codex, gemini-cli, opencode, amp, goose-cli, aider, etc.
 
-# NUR packages (format: "owner/package")
-# [nur]
-# include = []
+# Predefined tool bundles
+bundles = ["baseline", "rust-stable"]
+# Available:
+# - baseline: Modern CLI essentials (ripgrep, fd, bat, jq, etc.)
+# - complete: Full dev environment (baseline + more)
+# - rust-stable: Rust stable toolchain with rustfmt and clippy
+# - rust-nightly: Rust nightly toolchain
+# - rust-beta: Rust beta toolchain
+
+# Exact nixpkgs package names (use `nix search nixpkgs <name>`)
+# NUR packages use "nur:owner/package" prefix
+packages = [
+  "python312",
+  "nodejs_22",
+  "go_1_24",
+  # "nur:owner/package",
+]
 ```
 
 **agentbox.toml features:**
 - `[orchestrator]` section - multi-agent coordinators
-- `[llm-agents]` section - AI coding agents from numtide/llm-agents.nix
+- `agents` list - AI coding agents from numtide/llm-agents.nix
+- `bundles` list - predefined tool collections and rust toolchains
+- `packages` list - exact nixpkgs names (no version mapping magic)
+- NUR packages via `nur:owner/package` prefix
 - Pre-built devShells (`nix develop .#schmux`, `.#claude`, etc.)
 - OCI image building support
 
-The `mkProjectShell.nix` reads this and composes a devShell with substrate + orchestrator + agents + tools + bundle tools.
+The `mkProjectShell.nix` reads this and composes a devShell with substrate + orchestrator + agents + bundles + packages.
 
 ## Build & Test Commands
 

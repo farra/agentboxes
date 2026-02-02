@@ -8,26 +8,25 @@
 #     inherit pkgs system substrate orchestrators llmAgentsPkgs nurPkgs;
 #   } ./agentbox.toml
 #
-# agentbox.toml format:
-#   [orchestrator]      # agentboxes-specific
+# agentbox.toml format (simplified):
+#   [image]
+#   name = "my-project"
+#   base = "wolfi"
+#   tag = "latest"
+#
+#   [orchestrator]
 #   name = "schmux"
 #
-#   [bundles]
-#   include = ["complete"]
+#   agents = ["claude-code"]
 #
-#   [tools]
-#   python = "3.12"
-#   nodejs = "20"
-#   rust = "stable"
+#   bundles = ["baseline", "rust-stable"]
 #
-#   [rust]
-#   components = ["rustfmt", "clippy"]
-#
-#   [llm-agents]
-#   include = ["claude-code"]
-#
-#   [nur]
-#   include = ["owner/package"]
+#   packages = [
+#     "python312",
+#     "nodejs_22",
+#     "htop",
+#     "nur:owner/package",
+#   ]
 
 { pkgs, system, substrate ? [], orchestrators ? {}, llmAgentsPkgs ? {}, nurPkgs ? null }:
 
@@ -41,82 +40,36 @@ let
   bundles = import ./bundles.nix;
 
   # =========================================================================
-  # Tool Resolution (aligned with cautomaton-develops)
-  # =========================================================================
-
-  # Version mappings for tools with non-standard naming
-  versionMap = {
-    python = {
-      "3.10" = pkgs.python310;
-      "3.11" = pkgs.python311;
-      "3.12" = pkgs.python312;
-      "3.13" = pkgs.python313;
-    };
-    nodejs = {
-      "18" = pkgs.nodejs_18;
-      "20" = pkgs.nodejs_20;
-      "22" = pkgs.nodejs_22;
-    };
-    go = {
-      "1.21" = pkgs.go_1_21;
-      "1.22" = pkgs.go_1_22;
-      "1.23" = pkgs.go_1_23;
-      "1.24" = pkgs.go_1_24 or pkgs.go;
-    };
-  };
-
-  # Map a tool name + version to a package
-  # Skip rust here - handled separately via getRustToolchain
-  mapTool = name: version:
-    let
-      fromVersionMap = versionMap.${name}.${version} or null;
-      fromPkgs = pkgs.${name} or null;
-    in
-      if name == "rust" then null
-      else if fromVersionMap != null then fromVersionMap
-      else if fromPkgs != null then fromPkgs
-      else builtins.trace "Warning: Unknown tool ${name} ${version}" null;
-
-  # Support both old [runtimes] and new [tools] section names
-  toolsSection = config.tools or config.runtimes or {};
-
-  # Resolve tools from agentbox.toml (excluding rust)
-  toolPackages = builtins.filter (p: p != null) (
-    builtins.attrValues (
-      builtins.mapAttrs mapTool toolsSection
-    )
-  );
-
-  # =========================================================================
-  # Rust Toolchain (via rust-overlay)
-  # =========================================================================
-
-  getRustToolchain = let
-    version = toolsSection.rust or null;
-    components = config.rust.components or [ "rustfmt" "clippy" ];
-
-    toolchain =
-      if version == "stable" then pkgs.rust-bin.stable.latest.default
-      else if version == "beta" then pkgs.rust-bin.beta.latest.default
-      else if version == "nightly" then pkgs.rust-bin.nightly.latest.default
-      else if version != null then
-        # Specific version like "1.75.0"
-        pkgs.rust-bin.stable.${version}.default
-      else null;
-  in
-    if toolchain != null then
-      toolchain.override { extensions = components; }
-    else null;
-
-  rustPackages = if getRustToolchain != null then [ getRustToolchain ] else [];
-
-  # =========================================================================
   # Bundles
   # =========================================================================
 
-  includedBundles = config.bundles.include or [ "complete" ];
+  includedBundles = config.bundles or [];
+
+  # Check for rust bundles (handled specially via rust-overlay)
+  hasRustStable = builtins.elem "rust-stable" includedBundles;
+  hasRustNightly = builtins.elem "rust-nightly" includedBundles;
+  hasRustBeta = builtins.elem "rust-beta" includedBundles;
+
+  # Get rust toolchain if a rust bundle is requested
+  getRustToolchain =
+    let
+      toolchain =
+        if hasRustStable then pkgs.rust-bin.stable.latest.default
+        else if hasRustNightly then pkgs.rust-bin.nightly.latest.default
+        else if hasRustBeta then pkgs.rust-bin.beta.latest.default
+        else null;
+    in
+      if toolchain != null then
+        toolchain.override { extensions = [ "rustfmt" "clippy" ]; }
+      else null;
+
+  rustPackages = if getRustToolchain != null then [ getRustToolchain ] else [];
+
+  # Filter out rust bundles from regular bundle processing
+  regularBundles = builtins.filter (b: !(builtins.elem b ["rust-stable" "rust-nightly" "rust-beta"])) includedBundles;
+
   bundleToolNames = builtins.concatLists (
-    map (name: bundles.${name} or []) includedBundles
+    map (name: bundles.${name} or []) regularBundles
   );
 
   # Resolve bundle tool names to packages (filter nulls for missing packages)
@@ -137,21 +90,10 @@ let
     else [];
 
   # =========================================================================
-  # LLM Agents (aligned with cautomaton-develops)
+  # LLM Agents
   # =========================================================================
 
-  # New format: [llm-agents] include = ["claude-code"]
-  llmAgentNames = config.llm-agents.include or [];
-
-  # Backwards compat: [agents] claude = true -> claude-code
-  legacyNameMap = {
-    claude = "claude-code";
-    codex = "codex";
-    gemini = "gemini-cli";
-    opencode = "opencode";
-  };
-  legacyAgentNames = map (n: legacyNameMap.${n} or n)
-    (builtins.filter (n: config.agents.${n} == true) (builtins.attrNames (config.agents or {})));
+  agentNames = config.agents or [];
 
   # Auto-include agents for agent-specific orchestrators
   # Ralph always requires claude-code
@@ -160,7 +102,7 @@ let
     else [];
 
   # Combine all agent names (unique)
-  allAgentNames = pkgs.lib.unique (llmAgentNames ++ legacyAgentNames ++ autoIncludedAgents);
+  allAgentNames = pkgs.lib.unique (agentNames ++ autoIncludedAgents);
 
   # Resolve agent names to packages from llm-agents.nix
   agentPackages = builtins.filter (p: p != null) (
@@ -172,28 +114,33 @@ let
   );
 
   # =========================================================================
-  # NUR Packages (aligned with cautomaton-develops)
+  # Packages (nixpkgs + NUR with nur: prefix)
   # =========================================================================
 
-  getNurPackages = let
-    specs = config.nur.include or [];
-    parseSpec = spec: let
-      parts = builtins.split "/" spec;
-      owner = builtins.elemAt parts 0;
-      pkg = builtins.elemAt parts 2;
-      repo = nurPkgs.repos.${owner} or null;
-    in
-      if nurPkgs == null then
-        builtins.trace "Warning: NUR not available, skipping ${spec}" null
-      else if repo == null then
-        builtins.trace "Warning: Unknown NUR repo: ${owner}" null
-      else if !(builtins.hasAttr pkg repo) then
-        builtins.trace "Warning: Unknown NUR package: ${spec}" null
-      else
-        repo.${pkg};
-  in builtins.filter (p: p != null) (map parseSpec specs);
+  packageSpecs = config.packages or [];
 
-  nurPackages = getNurPackages;
+  parsePackageSpec = spec:
+    if builtins.substring 0 4 spec == "nur:" then
+      let
+        nurSpec = builtins.substring 4 (-1) spec;
+        parts = builtins.split "/" nurSpec;
+        owner = builtins.elemAt parts 0;
+        pkg = builtins.elemAt parts 2;
+      in
+        if nurPkgs == null then
+          builtins.trace "Warning: NUR not available, skipping ${spec}" null
+        else if !(nurPkgs.repos ? ${owner}) then
+          builtins.trace "Warning: Unknown NUR repo: ${owner}" null
+        else if !(nurPkgs.repos.${owner} ? ${pkg}) then
+          builtins.trace "Warning: Unknown NUR package: ${spec}" null
+        else
+          nurPkgs.repos.${owner}.${pkg}
+    else
+      if builtins.hasAttr spec pkgs
+      then pkgs.${spec}
+      else builtins.trace "Warning: Unknown package: ${spec}" null;
+
+  extraPackages = builtins.filter (p: p != null) (map parsePackageSpec packageSpecs);
 
   # =========================================================================
   # Build Description
@@ -210,10 +157,9 @@ in pkgs.mkShell {
     substrate
     ++ orchestratorPackages
     ++ agentPackages
-    ++ toolPackages
     ++ rustPackages
     ++ bundlePackages
-    ++ nurPackages
+    ++ extraPackages
   );
 
   shellHook = ''

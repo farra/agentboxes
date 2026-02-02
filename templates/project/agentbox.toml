@@ -5,35 +5,36 @@
 #
 # Run `nix develop` to enter the environment.
 
+# Image configuration (for OCI image builds)
+# [image]
+# name = "my-project"
+# base = "wolfi"  # wolfi (smaller) or nix (fully reproducible)
+# tag = "latest"
+
 # Orchestrator (optional) - multi-agent coordinator
 # Available: schmux, gastown, openclaw, ralph
 [orchestrator]
 name = "schmux"
 
-# Tool bundles
-# - baseline: 28 essential modern CLI tools
-# - complete: 61 tools (baseline + extras)
-[bundles]
-include = ["complete"]
-
-# Language runtimes and tools
-[tools]
-python = "3.12"
-nodejs = "20"
-# go = "1.23"
-# rust = "stable"  # "stable", "beta", "nightly", or "1.75.0"
-
-# Rust components (when rust is enabled in [tools])
-# [rust]
-# components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]
-
-# AI coding agents from llm-agents.nix
-# https://github.com/numtide/llm-agents.nix
-[llm-agents]
-include = ["claude-code"]
+# AI coding agents (from github:numtide/llm-agents.nix)
 # Available: claude-code, codex, gemini-cli, opencode, amp, goose-cli, aider, etc.
+agents = ["claude-code"]
 
-# NUR packages (format: "owner/package")
-# https://github.com/nix-community/NUR
-# [nur]
-# include = []
+# Predefined tool bundles
+# - baseline: Modern CLI essentials (ripgrep, fd, bat, jq, etc.)
+# - complete: Full dev environment (baseline + more)
+# - rust-stable: Rust stable toolchain with rustfmt and clippy
+# - rust-nightly: Rust nightly toolchain
+# - rust-beta: Rust beta toolchain
+bundles = ["complete"]
+
+# Exact nixpkgs package names
+# Use `nix search nixpkgs <name>` to find packages
+# NUR packages use "nur:owner/package" prefix
+packages = [
+  "python312",
+  "nodejs_22",
+  # "go_1_24",
+  # "htop",
+  # "nur:owner/package",
+]

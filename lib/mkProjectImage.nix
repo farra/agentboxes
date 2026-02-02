@@ -13,10 +13,25 @@
 # Load with: docker load < result
 # Use with distrobox: distrobox create --image <name>:latest --name dev
 #
-# Base image options (in agentbox.toml):
+# agentbox.toml format (simplified):
 #   [image]
-#   base = "wolfi"  # Use ublue wolfi-toolbox as base (smaller, faster)
-#   base = "nix"    # Pure Nix image (default, larger but fully reproducible)
+#   name = "my-project"
+#   base = "wolfi"   # wolfi (smaller, faster) or nix (fully reproducible)
+#   tag = "latest"
+#
+#   [orchestrator]
+#   name = "schmux"
+#
+#   agents = ["claude-code"]
+#
+#   bundles = ["baseline", "rust-stable"]
+#
+#   packages = [
+#     "python312",
+#     "nodejs_22",
+#     "htop",
+#     "nur:owner/package",
+#   ]
 
 { pkgs, system, substrate ? [], orchestrators ? {}, llmAgentsPkgs ? {}, nurPkgs ? null }:
 
@@ -47,76 +62,36 @@ let
   bundles = import ./bundles.nix;
 
   # =========================================================================
-  # Tool Resolution (same as mkProjectShell.nix)
-  # =========================================================================
-
-  versionMap = {
-    python = {
-      "3.10" = pkgs.python310;
-      "3.11" = pkgs.python311;
-      "3.12" = pkgs.python312;
-      "3.13" = pkgs.python313;
-    };
-    nodejs = {
-      "18" = pkgs.nodejs_18;
-      "20" = pkgs.nodejs_20;
-      "22" = pkgs.nodejs_22;
-    };
-    go = {
-      "1.21" = pkgs.go_1_21;
-      "1.22" = pkgs.go_1_22;
-      "1.23" = pkgs.go_1_23;
-      "1.24" = pkgs.go_1_24 or pkgs.go;
-    };
-  };
-
-  mapTool = name: version:
-    let
-      fromVersionMap = versionMap.${name}.${version} or null;
-      fromPkgs = pkgs.${name} or null;
-    in
-      if name == "rust" then null
-      else if fromVersionMap != null then fromVersionMap
-      else if fromPkgs != null then fromPkgs
-      else builtins.trace "Warning: Unknown tool ${name} ${version}" null;
-
-  toolsSection = config.tools or config.runtimes or {};
-
-  toolPackages = builtins.filter (p: p != null) (
-    builtins.attrValues (
-      builtins.mapAttrs mapTool toolsSection
-    )
-  );
-
-  # =========================================================================
-  # Rust Toolchain (via rust-overlay)
-  # =========================================================================
-
-  getRustToolchain = let
-    version = toolsSection.rust or null;
-    components = config.rust.components or [ "rustfmt" "clippy" ];
-
-    toolchain =
-      if version == "stable" then pkgs.rust-bin.stable.latest.default or null
-      else if version == "beta" then pkgs.rust-bin.beta.latest.default or null
-      else if version == "nightly" then pkgs.rust-bin.nightly.latest.default or null
-      else if version != null then
-        pkgs.rust-bin.stable.${version}.default or null
-      else null;
-  in
-    if toolchain != null then
-      toolchain.override { extensions = components; }
-    else null;
-
-  rustPackages = if getRustToolchain != null then [ getRustToolchain ] else [];
-
-  # =========================================================================
   # Bundles
   # =========================================================================
 
-  includedBundles = config.bundles.include or [ "complete" ];
+  includedBundles = config.bundles or [];
+
+  # Check for rust bundles (handled specially via rust-overlay)
+  hasRustStable = builtins.elem "rust-stable" includedBundles;
+  hasRustNightly = builtins.elem "rust-nightly" includedBundles;
+  hasRustBeta = builtins.elem "rust-beta" includedBundles;
+
+  # Get rust toolchain if a rust bundle is requested
+  getRustToolchain =
+    let
+      toolchain =
+        if hasRustStable then pkgs.rust-bin.stable.latest.default or null
+        else if hasRustNightly then pkgs.rust-bin.nightly.latest.default or null
+        else if hasRustBeta then pkgs.rust-bin.beta.latest.default or null
+        else null;
+    in
+      if toolchain != null then
+        toolchain.override { extensions = [ "rustfmt" "clippy" ]; }
+      else null;
+
+  rustPackages = if getRustToolchain != null then [ getRustToolchain ] else [];
+
+  # Filter out rust bundles from regular bundle processing
+  regularBundles = builtins.filter (b: !(builtins.elem b ["rust-stable" "rust-nightly" "rust-beta"])) includedBundles;
+
   bundleToolNames = builtins.concatLists (
-    map (name: bundles.${name} or []) includedBundles
+    map (name: bundles.${name} or []) regularBundles
   );
 
   bundlePackages = builtins.filter (p: p != null) (
@@ -175,22 +150,14 @@ let
   # LLM Agents
   # =========================================================================
 
-  llmAgentNames = config.llm-agents.include or [];
+  agentNames = config.agents or [];
 
-  legacyNameMap = {
-    claude = "claude-code";
-    codex = "codex";
-    gemini = "gemini-cli";
-    opencode = "opencode";
-  };
-  legacyAgentNames = map (n: legacyNameMap.${n} or n)
-    (builtins.filter (n: config.agents.${n} == true) (builtins.attrNames (config.agents or {})));
-
+  # Auto-include agents for agent-specific orchestrators
   autoIncludedAgents =
     if orchestratorName == "ralph" then [ "claude-code" ]
     else [];
 
-  allAgentNames = pkgs.lib.unique (llmAgentNames ++ legacyAgentNames ++ autoIncludedAgents);
+  allAgentNames = pkgs.lib.unique (agentNames ++ autoIncludedAgents);
 
   agentPackages = builtins.filter (p: p != null) (
     map (name:
@@ -201,24 +168,27 @@ let
   );
 
   # =========================================================================
-  # NUR Packages
+  # Packages (nixpkgs + NUR with nur: prefix)
   # =========================================================================
 
-  getNurPackages = let
-    specs = config.nur.include or [];
-    parseSpec = spec: let
-      parts = builtins.split "/" spec;
-      owner = builtins.elemAt parts 0;
-      pkg = builtins.elemAt parts 2;
-      repo = nurPkgs.repos.${owner} or null;
-    in
-      if nurPkgs == null then null
-      else if repo == null then null
-      else if !(builtins.hasAttr pkg repo) then null
-      else repo.${pkg};
-  in builtins.filter (p: p != null) (map parseSpec specs);
+  packageSpecs = config.packages or [];
 
-  nurPackages = getNurPackages;
+  parsePackageSpec = spec:
+    if builtins.substring 0 4 spec == "nur:" then
+      let
+        nurSpec = builtins.substring 4 (-1) spec;
+        parts = builtins.split "/" nurSpec;
+        owner = builtins.elemAt parts 0;
+        pkg = builtins.elemAt parts 2;
+      in
+        if nurPkgs == null then null
+        else if !(nurPkgs.repos ? ${owner}) then null
+        else if !(nurPkgs.repos.${owner} ? ${pkg}) then null
+        else nurPkgs.repos.${owner}.${pkg}
+    else
+      pkgs.${spec} or null;
+
+  extraPackages = builtins.filter (p: p != null) (map parsePackageSpec packageSpecs);
 
   # =========================================================================
   # Image Configuration
@@ -243,14 +213,22 @@ let
     (if useWolfiBase then [] else substrate)
     ++ orchestratorPackages
     ++ agentPackages
-    ++ toolPackages
     ++ rustPackages
     ++ bundlePackages
-    ++ nurPackages
+    ++ extraPackages
     ++ distroboxPackages
     ++ stubPackageManagers
     ++ essentialPackages
   );
+
+  # For wolfi base: put Nix packages in /nix/profile to avoid shadowing /lib, /bin, etc.
+  # This prevents conflicts with wolfi's glibc and system binaries
+  nixProfile = pkgs.buildEnv {
+    name = "nix-profile";
+    paths = allPackages;
+    # Only link bin directories - avoid lib which would shadow wolfi's libc
+    pathsToLink = [ "/bin" "/share" ];
+  };
 
   # Description for logging
   description = builtins.concatStringsSep " + " (
@@ -267,15 +245,19 @@ in pkgs.dockerTools.buildLayeredImage {
   # Use wolfi-toolbox as base when configured, otherwise build from scratch
   fromImage = if useWolfiBase then wolfiBaseImage else null;
 
-  contents = allPackages;
+  # For wolfi: use nixProfile to avoid shadowing /lib with Nix's symlinks
+  # For pure Nix: use allPackages directly (we control the whole filesystem)
+  contents = if useWolfiBase then [ nixProfile ] else allPackages;
 
   config = {
     # Wolfi uses /usr/bin/bash, pure Nix uses /bin/bash
     Cmd = if useWolfiBase then [ "/usr/bin/bash" ] else [ "/bin/bash" ];
     Env = [
-      # Wolfi has /usr/bin structure, pure Nix uses /bin
-      # Include both to ensure tools are found regardless of base
-      "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+      # For wolfi: add /nix/profile/bin where we put Nix packages
+      # For pure Nix: standard paths
+      (if useWolfiBase
+        then "PATH=/nix/profile/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        else "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin")
       "TERM=xterm-256color"
       "LANG=en_US.UTF-8"
     ];
@@ -291,8 +273,19 @@ in pkgs.dockerTools.buildLayeredImage {
   # For wolfi base, most of this is already handled - we just add Nix bin symlinks
   extraCommands = if useWolfiBase then ''
     # Wolfi base already has distrobox compatibility set up
-    # Just ensure Nix-installed binaries are accessible
-    mkdir -p usr/local/bin
+    # The nixProfile is placed at / but only contains /bin and /share
+    # We need to move it to /nix/profile
+    if [ -d bin ]; then
+      mkdir -p nix/profile
+      mv bin nix/profile/
+    fi
+    if [ -d share ]; then
+      mkdir -p nix/profile
+      mv share nix/profile/
+    fi
+
+    # Ensure etc exists for our customizations
+    mkdir -p etc
 
     # Add welcome banner
     cat > etc/motd << 'MOTD'

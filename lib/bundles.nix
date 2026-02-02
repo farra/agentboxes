@@ -1,9 +1,13 @@
 # Tool Bundles
 #
 # Pre-defined collections of commonly useful development tools.
-# Include them via agentbox.toml: [bundles] include = ["baseline"]
+# Include them via agentbox.toml: bundles = ["baseline"]
 #
 # These are curated sets of standalone CLI tools that work well together.
+#
+# Special bundles:
+# - rust-stable, rust-nightly, rust-beta: Rust toolchain via rust-overlay
+#   These are markers handled specially in mkProjectShell/mkProjectImage.
 
 {
   # distrobox: Dependencies required for distrobox container entry
@@ -96,4 +100,11 @@
     # Logs
     "lnav"
   ];
+
+  # Rust bundles - markers for rust-overlay toolchains
+  # Actual toolchain built in mkProjectShell.nix / mkProjectImage.nix
+  # Default components: rustfmt, clippy
+  rust-stable = [];
+  rust-nightly = [];
+  rust-beta = [];
 }
