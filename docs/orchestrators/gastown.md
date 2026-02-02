@@ -54,7 +54,7 @@ gt install ~/gt
 gt rig add beads https://github.com/steveyegge/beads.git
 ```
 
-### Option C: Using Distrobox
+### Option C: Using Distrobox (Recommended for Persistent Use)
 
 ```bash
 # Build the base image
@@ -70,6 +70,8 @@ nix develop github:farra/agentboxes#gastown
 gt install ~/gt
 gt rig add beads https://github.com/steveyegge/beads.git
 ```
+
+Distrobox shares your `$HOME`, so `~/gt` workspace, SSH keys, and dotfiles persist across sessions.
 
 ## Running a Code Review
 

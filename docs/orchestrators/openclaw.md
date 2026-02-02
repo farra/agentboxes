@@ -46,7 +46,7 @@ openclaw onboard --install-daemon
 openclaw gateway run
 ```
 
-### Option C: Using Distrobox
+### Option C: Using Distrobox (Recommended for Persistent Use)
 
 ```bash
 # Build the base image
@@ -62,6 +62,8 @@ nix develop github:farra/agentboxes#openclaw
 openclaw onboard --install-daemon
 openclaw gateway run
 ```
+
+Distrobox shares your `$HOME`, so `~/.config/openclaw`, SSH keys, and dotfiles persist across sessions.
 
 ## Configuring for Code Discussions
 

@@ -43,12 +43,12 @@ docker run -it \
   -p 7337:7337 \
   agentboxes-base:latest
 
-# Inside the container, install schmux and start
-curl -fsSL https://raw.githubusercontent.com/sergeknystautas/schmux/main/install.sh | bash
+# Inside the container
+nix develop github:farra/agentboxes#schmux
 schmux start
 ```
 
-### Option C: Using Distrobox
+### Option C: Using Distrobox (Recommended for Persistent Use)
 
 ```bash
 # Build the base image
@@ -59,10 +59,12 @@ docker load < result
 distrobox create --image agentboxes-base:latest --name schmux-box
 distrobox enter schmux-box
 
-# Inside distrobox, install and run
-curl -fsSL https://raw.githubusercontent.com/sergeknystautas/schmux/main/install.sh | bash
+# Inside distrobox
+nix develop github:farra/agentboxes#schmux
 schmux start
 ```
+
+Distrobox shares your `$HOME`, so SSH keys, dotfiles, and `~/.schmux` config persist across sessions.
 
 ## Configuring for Beads Code Review
 

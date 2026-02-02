@@ -60,27 +60,28 @@ ralph-enable
 ralph --monitor
 ```
 
-### Option C: Using Distrobox
+### Option C: Using Distrobox (Recommended for Persistent Use)
 
 ```bash
-# Clone the repository
-git clone https://github.com/steveyegge/beads.git
-cd beads
-
-# Build the base image
+# Build the base image (one-time)
 nix build github:farra/agentboxes#base-image
 docker load < result
 
-# Create and enter distrobox
+# Create distrobox (one-time)
 distrobox create --image agentboxes-base:latest --name ralph-box
-distrobox enter ralph-box
 
-# Navigate to project and set up
-cd /path/to/beads
+# Clone the repository (distrobox shares $HOME, so clone on host or inside)
+git clone https://github.com/steveyegge/beads.git ~/projects/beads
+
+# Enter distrobox and work
+distrobox enter ralph-box
+cd ~/projects/beads
 nix develop github:farra/agentboxes#ralph
 ralph-enable
 ralph --monitor
 ```
+
+Distrobox shares your `$HOME`, so `~/projects`, SSH keys, `.ralph/` configs, and dotfiles persist across sessions.
 
 ## Configuring for Code Review
 
