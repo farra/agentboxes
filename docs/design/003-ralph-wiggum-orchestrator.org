@@ -1,6 +1,6 @@
 #+TITLE: 003 - Ralph Wiggum Orchestrator
 #+AUTHOR: jaaron
-#+STATUS: Draft
+#+STATUS: Active
 #+CATEGORY: orchestrator
 #+CREATED: [2026-02-01]
 #+LAST_MODIFIED: [2026-02-01]
@@ -191,35 +191,35 @@ ralph --monitor
 :CATEGORY: tasks
 :END:
 
-** TODO [AB-003-01] Create orchestrators/ralph/default.nix              :p1:
+** DONE [AB-003-01] Create orchestrators/ralph/default.nix              :p1:
 :PROPERTIES:
 :EFFORT: M
 :END:
 
 Create the Ralph orchestrator package with wrapper scripts for ralph, ralph-monitor, ralph-enable. Include claude-code automatically.
 
-** TODO [AB-003-02] Update flake.nix with ralph orchestrator            :p1:
+** DONE [AB-003-02] Update flake.nix with ralph orchestrator            :p1:
 :PROPERTIES:
 :EFFORT: S
 :END:
 
 Add ralph to the orchestrators map in flake.nix. Export devShells.ralph and packages.ralph.
 
-** TODO [AB-003-03] Update mkProjectShell for ralph auto-include        :p1:
+** DONE [AB-003-03] Update mkProjectShell for ralph auto-include        :p1:
 :PROPERTIES:
 :EFFORT: S
 :END:
 
 When orchestrator is "ralph", auto-include claude agent even if not specified in deps.toml.
 
-** TODO [AB-003-04] Test ralph shell end-to-end                         :p2:
+** DONE [AB-003-04] Test ralph shell end-to-end                         :p2:
 :PROPERTIES:
 :EFFORT: M
 :END:
 
 Verify: =nix develop .#ralph= -> =ralph-enable= -> =ralph --monitor= works correctly.
 
-** TODO [AB-003-05] Document ralph usage                                :p2:
+** DONE [AB-003-05] Document ralph usage                                :p2:
 :PROPERTIES:
 :EFFORT: S
 :END:
@@ -231,28 +231,28 @@ Create docs/orchestrators/ralph.md with quickstart and configuration reference.
 :CATEGORY: questions
 :END:
 
-** OPEN Should we vendor ralph or use a flake input?
+** DECIDED Should we vendor ralph or use a flake input?
+:PROPERTIES:
+:DECIDED: Use flake input (community best practice)
+:END:
 
 Current approach vendors ralph as a git submodule. Alternative would be creating a ralph-nix flake (like claude-code-nix).
 
-Pros of vendoring:
-- Simple, no external dependency
-- Can patch if needed
-- Works offline
+Decision: Use flake input =github:frankbria/ralph-claude-code= with =flake = false=. This follows the same pattern as claude-code-nix and codex-cli-nix. The vendor/ directory remains for local reference only.
 
-Cons:
-- Manual updates (git submodule update)
-- Larger repo size
-
-Recommendation: Keep vendoring for now. Consider flake input if ralph gets its own nix packaging upstream.
-
-** OPEN How to handle ralph's install.sh global install?
+** DECIDED How to handle ralph's install.sh global install?
+:PROPERTIES:
+:DECIDED: Skip it - Nix wrapper provides scripts directly
+:END:
 
 Ralph's =install.sh= installs to =~/.local/bin= and =~/.ralph/=. In our Nix approach, we don't need this - we provide the scripts directly in the shell.
 
 Decision: Skip ralph's install.sh. Our wrapper scripts make the commands available in the Nix shell. Document that users in the agentboxes shell don't need to run install.sh.
 
-** OPEN Should ralph-setup be included?
+** DECIDED Should ralph-setup be included?
+:PROPERTIES:
+:DECIDED: Omit - template + ralph-enable covers the use case
+:END:
 
 Ralph has =ralph-setup= for creating new projects. In our model, users would use =nix flake init -t .#project= then =ralph-enable=.
 
