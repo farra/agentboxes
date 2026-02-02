@@ -1,0 +1,31 @@
+# schmux-full: Full-featured schmux orchestrator environment
+#
+# Includes:
+# - schmux multi-agent tmux orchestrator
+# - All major AI coding agents
+# - Python, Node.js, Go, Rust runtimes
+# - Complete tool bundle (61 tools)
+#
+# Use directly:
+#   nix develop github:farra/agentboxes?dir=distros/schmux-full
+#
+# Or copy to your project:
+#   cp distros/schmux-full.toml ./agentbox.toml
+
+[orchestrator]
+name = "schmux"
+
+[bundles]
+include = ["complete"]
+
+[tools]
+python = "3.12"
+nodejs = "22"
+go = "1.24"
+rust = "stable"
+
+[rust]
+components = ["rustfmt", "clippy"]
+
+[llm-agents]
+include = ["claude-code", "gemini-cli", "codex", "opencode"]

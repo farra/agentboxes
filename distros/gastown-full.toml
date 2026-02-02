@@ -1,0 +1,31 @@
+# gastown-full: Full-featured gastown orchestrator environment
+#
+# Includes:
+# - gastown multi-agent convoy orchestrator
+# - All major AI coding agents
+# - Python, Node.js, Go, Rust runtimes
+# - Complete tool bundle (61 tools)
+#
+# Use directly:
+#   nix develop github:farra/agentboxes?dir=distros/gastown-full
+#
+# Or copy to your project:
+#   cp distros/gastown-full.toml ./agentbox.toml
+
+[orchestrator]
+name = "gastown"
+
+[bundles]
+include = ["complete"]
+
+[tools]
+python = "3.12"
+nodejs = "22"
+go = "1.24"
+rust = "stable"
+
+[rust]
+components = ["rustfmt", "clippy"]
+
+[llm-agents]
+include = ["claude-code", "gemini-cli", "codex", "opencode"]

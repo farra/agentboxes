@@ -106,11 +106,32 @@ docker load < result
 distrobox create --image agentbox:latest --name dev
 ```
 
+## Distros
+
+The `distros/` directory contains full-featured configurations for each orchestrator. These include all common runtimes (Python, Node.js, Go, Rust) and applicable AI agents.
+
+| Distro | Orchestrator | Agents |
+|--------|--------------|--------|
+| `schmux-full` | schmux | claude, gemini, codex, opencode |
+| `gastown-full` | gastown | claude, gemini, codex, opencode |
+| `openclaw-full` | openclaw | claude, gemini, codex, opencode |
+| `ralph-full` | ralph | claude-code only |
+
+Use a distro as your starting point:
+
+```bash
+# Copy a distro config to your project
+curl -O https://raw.githubusercontent.com/farra/agentboxes/main/distros/schmux-full.toml
+mv schmux-full.toml agentbox.toml
+```
+
+Or build the pre-built image directly (see below).
+
 ## OCI Images
 
 ### Pre-built Orchestrator Images
 
-Each orchestrator has a pre-built image with everything included:
+Each orchestrator has a pre-built image based on its `distros/*-full.toml` config:
 
 ```bash
 nix build github:farra/agentboxes#schmux-image
@@ -118,6 +139,8 @@ nix build github:farra/agentboxes#gastown-image
 nix build github:farra/agentboxes#openclaw-image
 nix build github:farra/agentboxes#ralph-image
 ```
+
+These images include all runtimes (Python, Node.js, Go, Rust), the complete tool bundle, and all applicable agents.
 
 ### Project-specific Images
 

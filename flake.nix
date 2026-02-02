@@ -151,15 +151,6 @@
           inherit pkgs system substrate orchestrators nurPkgs;
           llmAgentsPkgs = llmPkgs;
         };
-
-        # Helper to create an image config
-        makeImageConfig = name: ''
-          [orchestrator]
-          name = "${name}"
-
-          [bundles]
-          include = ["complete"]
-        '';
       in
       {
         # Packages that can be built
@@ -180,11 +171,11 @@
           beads = llmPkgs.beads;
           base-image = baseImage;
 
-          # Pre-built orchestrator images
-          schmux-image = mkProjectImage (pkgs.writeText "agentbox.toml" (makeImageConfig "schmux"));
-          gastown-image = mkProjectImage (pkgs.writeText "agentbox.toml" (makeImageConfig "gastown"));
-          openclaw-image = mkProjectImage (pkgs.writeText "agentbox.toml" (makeImageConfig "openclaw"));
-          ralph-image = mkProjectImage (pkgs.writeText "agentbox.toml" (makeImageConfig "ralph"));
+          # Pre-built orchestrator images (from distros/)
+          schmux-image = mkProjectImage ./distros/schmux-full.toml;
+          gastown-image = mkProjectImage ./distros/gastown-full.toml;
+          openclaw-image = mkProjectImage ./distros/openclaw-full.toml;
+          ralph-image = mkProjectImage ./distros/ralph-full.toml;
 
           default = schmux.package;
         };
