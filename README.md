@@ -7,107 +7,172 @@ Try locally, deploy to EC2, or run via distrobox. One command.
 ## Quick Start
 
 ```bash
-# Enter the schmux environment
+# Enter an orchestrator environment
 nix develop github:farra/agentboxes#schmux
 
-# Start the orchestrator
-schmux start
-schmux status  # Opens dashboard at http://localhost:7337
+# Or just an agent
+nix develop github:farra/agentboxes#claude
 ```
-
-## What This Is
-
-**agentboxes** provides reproducible Nix-based development environments for:
-
-1. **Individual AI Agents** - Claude Code, Codex CLI, Gemini CLI, OpenCode
-2. **Agent Orchestrators** - Schmux, Gastown, Ralph Wiggum, OpenClaw
-
-Each environment includes all necessary dependencies (language runtimes, tools, CLI utilities) so you can evaluate and run these tools without polluting your system.
-
-## Why
-
-- **No system pollution** - Everything runs in isolated Nix shells
-- **Reproducible** - Same environment on any machine via `flake.lock`
-- **Multiple deployment targets** - Local dev, EC2 instances, distrobox containers
-- **Easy comparison** - Try multiple orchestrators side-by-side
 
 ## Available Environments
 
+### Orchestrators
+
+| Name | Description | Command |
+|------|-------------|---------|
+| `schmux` | Multi-agent tmux orchestrator | `nix develop .#schmux` |
+| `gastown` | Multi-agent convoy orchestrator | `nix develop .#gastown` |
+| `openclaw` | Multi-channel AI gateway | `nix develop .#openclaw` |
+| `ralph` | Ralph Wiggum autonomous Claude runner | `nix develop .#ralph` |
+
+### Agents
+
+| Name | Description | Command |
+|------|-------------|---------|
+| `claude` | Claude Code CLI | `nix develop .#claude` |
+| `codex` | OpenAI Codex CLI | `nix develop .#codex` |
+| `gemini` | Google Gemini CLI | `nix develop .#gemini` |
+| `opencode` | OpenCode CLI | `nix develop .#opencode` |
+
 ### Substrate (Common Tools)
 
-All environments include the **substrate layer** - a curated set of tools for development workflows:
+All environments include the **substrate layer** - git, curl, jq, ripgrep, fd, fzf, tmux, htop, and more.
 
 ```bash
 # Use substrate directly for a minimal environment
 nix develop github:farra/agentboxes#substrate
 ```
 
-Includes: git, curl, wget, jq, yq, ripgrep, fd, fzf, tree, less, file, openssh, rsync, tmux, htop
+## Creating a Project
 
-### Orchestrators
-
-| Name | Description | Status | Command |
-|------|-------------|--------|---------|
-| `schmux` | Multi-agent tmux orchestrator | Available | `nix develop .#schmux` |
-| `gastown` | Multi-agent convoy orchestrator | Available | `nix develop .#gastown` |
-| `openclaw` | Multi-channel AI gateway | Available | `nix develop .#openclaw` |
-| `ralph` | Ralph Wiggum autonomous Claude runner | Available | `nix develop .#ralph` |
-
-### Agents
-
-| Name | Description | Status | Command |
-|------|-------------|--------|---------|
-| `claude` | Claude Code CLI | Available | `nix develop .#claude` |
-| `codex` | OpenAI Codex CLI | Available | `nix develop .#codex` |
-| `gemini` | Google Gemini CLI | Available | `nix develop .#gemini` |
-| `opencode` | OpenCode CLI | Available | `nix develop .#opencode` |
-
-All agent packages are sourced from [numtide/llm-agents.nix](https://github.com/numtide/llm-agents.nix), which provides daily updates and a binary cache.
-
-See [docs/orchestrators/](docs/orchestrators/) for detailed guides.
-
-## Usage Patterns
-
-### Project Template (Recommended)
-
-Create a self-contained project with orchestrator + agents + runtimes defined in `deps.toml`:
+The recommended way to use agentboxes is to create a project with a `deps.toml` file:
 
 ```bash
-# Initialize a new project
 mkdir my-ai-project && cd my-ai-project
 nix flake init -t github:farra/agentboxes#project
+```
 
-# Edit deps.toml to configure your environment
-cat deps.toml
-# [orchestrator]
-# name = "schmux"
-# [agents]
-# claude = true
-# [runtimes]
-# python = "3.12"
+This creates a `flake.nix` and `deps.toml`. Edit `deps.toml` to configure your environment:
 
-# Enter the composed environment
+```toml
+# Orchestrator (optional) - multi-agent coordinator
+[orchestrator]
+name = "schmux"
+
+# Tool bundles: "baseline" (28 tools) or "complete" (61 tools)
+[bundles]
+include = ["complete"]
+
+# Language runtimes
+[tools]
+python = "3.12"
+nodejs = "20"
+# go = "1.23"
+# rust = "stable"  # or "beta", "nightly", "1.75.0"
+
+# Rust components (when rust is enabled)
+# [rust]
+# components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]
+
+# AI coding agents
+[llm-agents]
+include = ["claude-code"]
+# Available: claude-code, codex, gemini-cli, opencode, amp, goose-cli, aider
+
+# NUR packages (format: "owner/package")
+# [nur]
+# include = []
+```
+
+Then enter the environment:
+
+```bash
 nix develop
 ```
 
-### Local Development
+## deps.toml Reference
+
+### [orchestrator]
+
+Optional. Adds a multi-agent orchestrator to your environment.
+
+```toml
+[orchestrator]
+name = "schmux"  # schmux | gastown | openclaw | ralph
+```
+
+### [bundles]
+
+Pre-configured tool collections:
+
+| Bundle | Tools | Description |
+|--------|-------|-------------|
+| `baseline` | 28 | Modern CLI essentials (ripgrep, fd, bat, eza, jq, fzf, etc.) |
+| `complete` | 61 | Everything in baseline plus git extras, networking, archives, etc. |
+
+```toml
+[bundles]
+include = ["complete"]
+```
+
+### [tools]
+
+Language runtimes with version pinning:
+
+```toml
+[tools]
+python = "3.12"    # 3.10, 3.11, 3.12, 3.13
+nodejs = "20"      # 18, 20, 22
+go = "1.23"        # 1.21, 1.22, 1.23, 1.24
+rust = "stable"    # stable, beta, nightly, or "1.75.0"
+```
+
+### [rust]
+
+Rust toolchain components (only used when `rust` is in `[tools]`):
+
+```toml
+[rust]
+components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]
+```
+
+### [llm-agents]
+
+AI coding agents from [numtide/llm-agents.nix](https://github.com/numtide/llm-agents.nix):
+
+```toml
+[llm-agents]
+include = ["claude-code", "codex"]
+```
+
+Available: `claude-code`, `codex`, `gemini-cli`, `opencode`, `amp`, `goose-cli`, `aider`, and more.
+
+### [nur]
+
+Community packages from [NUR](https://github.com/nix-community/NUR):
+
+```toml
+[nur]
+include = ["owner/package-name"]
+```
+
+## Other Usage Patterns
+
+### Direct Shell Access
 
 ```bash
 # Enter environment interactively
 nix develop github:farra/agentboxes#schmux
 
-# Or with direnv (auto-activate)
+# With direnv (auto-activate on cd)
 echo "use flake github:farra/agentboxes#schmux" > .envrc
 direnv allow
 ```
 
-### Build Package Locally
+### Build Packages
 
 ```bash
-# Build the package
 nix build github:farra/agentboxes#schmux
-
-# Run directly
 ./result/bin/schmux version
 ```
 
@@ -116,8 +181,6 @@ nix build github:farra/agentboxes#schmux
 ```bash
 # Build the base image (includes substrate tools)
 nix build github:farra/agentboxes#base-image
-
-# Load into Docker
 docker load < result
 
 # Run interactively
@@ -128,6 +191,28 @@ distrobox create --image agentboxes-base:latest --name agentbox
 distrobox enter agentbox
 ```
 
+## Orchestrator Guides
+
+- [schmux](docs/orchestrators/schmux.md) - tmux-based multi-agent orchestrator
+- [gastown](docs/orchestrators/gastown.md) - convoy-style orchestrator
+- [openclaw](docs/orchestrators/openclaw.md) - multi-channel AI gateway
+- [ralph](docs/orchestrators/ralph.md) - autonomous Claude Code runner
+
+## Server Deployment
+
+These environments work well on remote servers:
+
+- **Recommended**: Single EC2 instance per orchestrator (t3.large handles 3-6 concurrent agents)
+- **Alternative**: Single VM with distrobox isolation between orchestrators
+- **Access**: Tailscale or similar for secure private access
+
+## Why agentboxes?
+
+- **No system pollution** - Everything runs in isolated Nix shells
+- **Reproducible** - Same environment on any machine via `flake.lock`
+- **Multiple deployment targets** - Local dev, EC2 instances, distrobox containers
+- **Easy comparison** - Try multiple orchestrators side-by-side
+
 ## Project Structure
 
 ```
@@ -137,56 +222,17 @@ agentboxes/
 │   ├── substrate.nix         # Common tools layer
 │   ├── bundles.nix           # Tool bundles (baseline, complete)
 │   └── mkProjectShell.nix    # Compose devShell from deps.toml
-├── agents/
-│   ├── claude/
-│   │   └── default.nix       # Claude Code wrapper
-│   ├── codex/
-│   │   └── default.nix       # Codex CLI wrapper
-│   ├── gemini/
-│   │   └── default.nix       # Gemini CLI wrapper
-│   └── opencode/
-│       └── default.nix       # OpenCode wrapper
-├── orchestrators/
-│   ├── schmux/
-│   │   └── default.nix       # schmux package definition
-│   ├── gastown/
-│   │   └── default.nix       # gastown package definition
-│   ├── openclaw/
-│   │   └── default.nix       # openclaw environment
-│   └── ralph/
-│       └── default.nix       # ralph wrapper scripts
-├── templates/
-│   └── project/
-│       ├── flake.nix         # Template flake that reads deps.toml
-│       └── deps.toml         # Example configuration
-├── images/
-│   └── base.nix              # Base OCI image definition
-├── docs/
-│   └── orchestrators/
-│       ├── schmux.md         # Usage guide
-│       ├── gastown.md        # Usage guide
-│       ├── openclaw.md       # Usage guide
-│       └── ralph.md          # Usage guide
-└── vendor/                   # Git submodules for reference
-    ├── schmux/
-    ├── gastown/
-    └── openclaw/
+├── agents/                   # Agent wrappers (claude, codex, gemini, opencode)
+├── orchestrators/            # Orchestrator definitions (schmux, gastown, etc.)
+├── templates/project/        # Template for `nix flake init -t`
+├── images/                   # OCI image definitions
+└── docs/                     # Documentation
 ```
-
-## Server Deployment (EC2/Cloud)
-
-These environments are designed to run on remote servers:
-
-- **Recommended**: Single EC2 instance per orchestrator (t3.large for 3-6 concurrent agents)
-- **Alternative**: Single VM with distrobox isolation between orchestrators
-- **Access**: Tailscale or similar for secure private access
-
-See [docs/deployment.md](docs/deployment.md) for detailed cloud deployment guides.
 
 ## Related Projects
 
-- [cautomaton-develops](https://github.com/farra/cautomaton-develops) - The foundation this builds on
-- [dev-agent-backlog](https://github.com/farra/dev-agent-backlog) - Org-mode based agent work tracking
+- [numtide/llm-agents.nix](https://github.com/numtide/llm-agents.nix) - Source for all agent packages
+- [cautomaton-develops](https://github.com/farra/cautomaton-develops) - Foundation this builds on
 
 ## License
 
