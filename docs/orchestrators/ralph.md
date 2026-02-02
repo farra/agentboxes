@@ -16,106 +16,37 @@ Ralph enables continuous autonomous development by running Claude Code in a loop
 
 Unlike multi-agent orchestrators (schmux, gastown), Ralph focuses on a single Claude agent working autonomously on a project.
 
-## Getting Started: Code Review Example
-
-This walkthrough demonstrates using Ralph to review [Yegge's beads](https://github.com/steveyegge/beads) repository.
-
-### Option A: Using Nix (Recommended)
+## Installation
 
 ```bash
-# Clone the repository to review
-git clone https://github.com/steveyegge/beads.git
-cd beads
-
-# Enter the ralph environment
 nix develop github:farra/agentboxes#ralph
+```
 
-# Enable Ralph in this project (interactive wizard)
+For other deployment options (Docker, distrobox, OCI images), see the [main README](../../README.md#how-to-run-these-environments).
+
+## Getting Started
+
+```bash
+# Enable Ralph in a project (interactive wizard)
 ralph-enable
 
 # Start the autonomous loop with monitoring
 ralph --monitor
 ```
 
-### Option B: Using Pre-built Image + Distrobox (Recommended for Persistent Use)
+## Example: Code Review
+
+This walkthrough demonstrates using Ralph to review [Yegge's beads](https://github.com/steveyegge/beads) repository.
+
+### Step 1: Clone and Enable
 
 ```bash
-# Build the pre-built ralph image (everything included)
-nix build github:farra/agentboxes#ralph-image
-docker load < result
-
-# Create distrobox (one-time)
-distrobox create --image agentbox:latest --name ralph-box
-
-# Clone the repository (distrobox shares $HOME)
-git clone https://github.com/steveyegge/beads.git ~/projects/beads
-
-# Enter distrobox and work - ralph is pre-installed!
-distrobox enter ralph-box
-cd ~/projects/beads
-ralph-enable
-ralph --monitor
-```
-
-Distrobox shares your `$HOME`, so `~/projects`, SSH keys, `.ralph/` configs, and dotfiles persist across sessions.
-
-### Option C: Using Docker
-
-```bash
-# Clone the repository
 git clone https://github.com/steveyegge/beads.git
 cd beads
-
-# Build the pre-built ralph image
-nix build github:farra/agentboxes#ralph-image
-docker load < result
-
-# Run with project mounted - ralph is pre-installed
-docker run -it \
-  -v $(pwd):/workspace \
-  -w /workspace \
-  agentbox:latest
-
-ralph-enable
-ralph --monitor
-```
-
-### Option D: Using Base Image + nix develop (Runtime Flexibility)
-
-Use this if you need to switch between orchestrators or install additional tools:
-
-```bash
-# Build the base image (includes nix with flakes)
-nix build github:farra/agentboxes#base-image
-docker load < result
-
-# Create distrobox
-distrobox create --image agentboxes-base:latest --name dev
-distrobox enter dev
-
-# Clone and set up
-git clone https://github.com/steveyegge/beads.git ~/projects/beads
-cd ~/projects/beads
-nix develop github:farra/agentboxes#ralph
 ralph-enable
 ```
 
-## Configuring for Code Review
-
-### Step 1: Enable Ralph (Interactive)
-
-The `ralph-enable` wizard auto-detects your project and creates configuration:
-
-```bash
-cd beads
-ralph-enable
-```
-
-The wizard will:
-1. Detect project type (Go in this case)
-2. Identify available task sources (GitHub issues, beads, PRD files)
-3. Create the `.ralph/` configuration directory
-4. Generate initial configuration files
+The wizard will detect the project type and create the `.ralph/` configuration directory.
 
 ### Step 2: Configure PROMPT.md
 
