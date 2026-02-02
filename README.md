@@ -51,7 +51,7 @@ Includes: git, curl, wget, jq, yq, ripgrep, fd, fzf, tree, less, file, openssh, 
 | `schmux` | Multi-agent tmux orchestrator | Available | `nix develop .#schmux` |
 | `gastown` | Multi-agent convoy orchestrator | Available | `nix develop .#gastown` |
 | `openclaw` | Multi-channel AI gateway | Available | `nix develop .#openclaw` |
-| `ralph` | Ralph Wiggum autonomous Claude runner | Planned | - |
+| `ralph` | Ralph Wiggum autonomous Claude runner | Available | `nix develop .#ralph` |
 
 ### Agents
 
@@ -145,8 +145,10 @@ agentboxes/
 │   │   └── default.nix       # schmux package definition
 │   ├── gastown/
 │   │   └── default.nix       # gastown package definition
-│   └── openclaw/
-│       └── default.nix       # openclaw environment
+│   ├── openclaw/
+│   │   └── default.nix       # openclaw environment
+│   └── ralph/
+│       └── default.nix       # ralph wrapper scripts
 ├── templates/
 │   └── project/
 │       ├── flake.nix         # Template flake that reads deps.toml
@@ -157,7 +159,8 @@ agentboxes/
 │   └── orchestrators/
 │       ├── schmux.md         # Usage guide
 │       ├── gastown.md        # Usage guide
-│       └── openclaw.md       # Usage guide
+│       ├── openclaw.md       # Usage guide
+│       └── ralph.md          # Usage guide
 └── vendor/                   # Git submodules for reference
     ├── schmux/
     ├── gastown/
@@ -181,4 +184,4 @@ See [docs/deployment.md](docs/deployment.md) for detailed cloud deployment guide
 
 ## License
 
-MIT
+Apache-2.0
