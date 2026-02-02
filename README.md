@@ -1,90 +1,104 @@
 # agentboxes
 
-Ready-to-run environments for AI coding agents and orchestrators.
+Reproducible environments for AI coding agents and orchestrators.
 
-Try locally, deploy to EC2, or run via distrobox. One command.
+**Try locally** with `nix develop`. **Deploy persistently** with distrobox.
 
 ## Quick Start
 
-```bash
-# Enter an orchestrator environment
-nix develop github:farra/agentboxes#schmux
+### Option A: Try it out (ephemeral)
 
-# Or just an agent
-nix develop github:farra/agentboxes#claude
+```bash
+nix develop github:farra/agentboxes#schmux
+schmux start
 ```
+
+The environment disappears when you exit. Great for exploration.
+
+### Option B: Deploy persistently (distrobox)
+
+```bash
+# Build and load the base image
+nix build github:farra/agentboxes#base-image
+docker load < result
+
+# Create a persistent container
+distrobox create --image agentboxes-base:latest --name dev
+distrobox enter dev
+
+# Inside distrobox: install your orchestrator
+nix develop github:farra/agentboxes#schmux
+schmux start
+```
+
+Your orchestrator state (tmux sessions, config files, workspaces) survives restarts. Distrobox shares your `$HOME`, so SSH keys and dotfiles just work.
+
+### When to use which
+
+| Scenario | Approach |
+|----------|----------|
+| Trying an orchestrator | `nix develop` |
+| Comparing orchestrators side-by-side | `nix develop` |
+| Running on a remote server | distrobox |
+| Long-running orchestrator with state | distrobox |
+| Team environment on shared VM | distrobox (one per team member) |
 
 ## Available Environments
 
 ### Orchestrators
 
-| Name | Description | Command |
-|------|-------------|---------|
-| `schmux` | Multi-agent tmux orchestrator | `nix develop .#schmux` |
-| `gastown` | Multi-agent convoy orchestrator | `nix develop .#gastown` |
-| `openclaw` | Multi-channel AI gateway | `nix develop .#openclaw` |
-| `ralph` | Ralph Wiggum autonomous Claude runner | `nix develop .#ralph` |
+| Name | Description | Guide |
+|------|-------------|-------|
+| `schmux` | Multi-agent tmux orchestrator | [docs](docs/orchestrators/schmux.md) |
+| `gastown` | Multi-agent convoy orchestrator | [docs](docs/orchestrators/gastown.md) |
+| `openclaw` | Multi-channel AI gateway | [docs](docs/orchestrators/openclaw.md) |
+| `ralph` | Autonomous Claude Code runner | [docs](docs/orchestrators/ralph.md) |
 
 ### Agents
 
-| Name | Description | Command |
-|------|-------------|---------|
-| `claude` | Claude Code CLI | `nix develop .#claude` |
-| `codex` | OpenAI Codex CLI | `nix develop .#codex` |
-| `gemini` | Google Gemini CLI | `nix develop .#gemini` |
-| `opencode` | OpenCode CLI | `nix develop .#opencode` |
-
-### Substrate (Common Tools)
-
-All environments include the **substrate layer** - git, curl, jq, ripgrep, fd, fzf, tmux, htop, and more.
+| Name | Description |
+|------|-------------|
+| `claude` | Claude Code CLI |
+| `codex` | OpenAI Codex CLI |
+| `gemini` | Google Gemini CLI |
+| `opencode` | OpenCode CLI |
 
 ```bash
-# Use substrate directly for a minimal environment
-nix develop github:farra/agentboxes#substrate
+# Use an agent directly (without an orchestrator)
+nix develop github:farra/agentboxes#claude
 ```
 
-## Creating a Project
+### Substrate
 
-The recommended way to use agentboxes is to create a project with an `agentbox.toml` file:
+All environments include the **substrate layer**: git, curl, jq, ripgrep, fd, fzf, tmux, htop, and 50+ modern CLI tools.
+
+## Project-Based Configuration
+
+For project-specific environments, create an `agentbox.toml`:
 
 ```bash
 mkdir my-ai-project && cd my-ai-project
 nix flake init -t github:farra/agentboxes#project
 ```
 
-This creates a `flake.nix` and `agentbox.toml`. Edit `agentbox.toml` to configure your environment:
+This creates `flake.nix` and `agentbox.toml`. Edit the config:
 
 ```toml
-# Orchestrator (optional) - multi-agent coordinator
 [orchestrator]
 name = "schmux"
 
-# Tool bundles: "baseline" (28 tools) or "complete" (61 tools)
 [bundles]
 include = ["complete"]
 
-# Language runtimes
 [tools]
 python = "3.12"
 nodejs = "20"
-# go = "1.23"
-# rust = "stable"  # or "beta", "nightly", "1.75.0"
 
-# Rust components (when rust is enabled)
-# [rust]
-# components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]
-
-# AI coding agents
 [llm-agents]
 include = ["claude-code"]
-# Available: claude-code, codex, gemini-cli, opencode, amp, goose-cli, aider
-
-# NUR packages (format: "owner/package")
-# [nur]
-# include = []
 ```
 
-Then enter the environment:
+Then:
 
 ```bash
 nix develop
@@ -94,8 +108,6 @@ nix develop
 
 ### [orchestrator]
 
-Optional. Adds a multi-agent orchestrator to your environment.
-
 ```toml
 [orchestrator]
 name = "schmux"  # schmux | gastown | openclaw | ralph
@@ -103,21 +115,12 @@ name = "schmux"  # schmux | gastown | openclaw | ralph
 
 ### [bundles]
 
-Pre-configured tool collections:
-
 | Bundle | Tools | Description |
 |--------|-------|-------------|
 | `baseline` | 28 | Modern CLI essentials (ripgrep, fd, bat, eza, jq, fzf, etc.) |
-| `complete` | 61 | Everything in baseline plus git extras, networking, archives, etc. |
-
-```toml
-[bundles]
-include = ["complete"]
-```
+| `complete` | 61 | Everything in baseline plus git extras, networking, archives |
 
 ### [tools]
-
-Language runtimes with version pinning:
 
 ```toml
 [tools]
@@ -128,8 +131,6 @@ rust = "stable"    # stable, beta, nightly, or "1.75.0"
 ```
 
 ### [rust]
-
-Rust toolchain components (only used when `rust` is in `[tools]`):
 
 ```toml
 [rust]
@@ -156,62 +157,31 @@ Community packages from [NUR](https://github.com/nix-community/NUR):
 include = ["owner/package-name"]
 ```
 
-## Other Usage Patterns
-
-### Direct Shell Access
-
-```bash
-# Enter environment interactively
-nix develop github:farra/agentboxes#schmux
-
-# With direnv (auto-activate on cd)
-echo "use flake github:farra/agentboxes#schmux" > .envrc
-direnv allow
-```
-
-### Build Packages
-
-```bash
-nix build github:farra/agentboxes#schmux
-./result/bin/schmux version
-```
-
-### Container Images
-
-```bash
-# Build the base image (includes substrate tools)
-nix build github:farra/agentboxes#base-image
-docker load < result
-
-# Run interactively
-docker run -it agentboxes-base:latest
-
-# Use with distrobox
-distrobox create --image agentboxes-base:latest --name agentbox
-distrobox enter agentbox
-```
-
-## Orchestrator Guides
-
-- [schmux](docs/orchestrators/schmux.md) - tmux-based multi-agent orchestrator
-- [gastown](docs/orchestrators/gastown.md) - convoy-style orchestrator
-- [openclaw](docs/orchestrators/openclaw.md) - multi-channel AI gateway
-- [ralph](docs/orchestrators/ralph.md) - autonomous Claude Code runner
-
 ## Server Deployment
 
-These environments work well on remote servers:
+Orchestrators are stateful apps (tmux sessions, daemon processes). They work best with persistent environments:
 
-- **Recommended**: Single EC2 instance per orchestrator (t3.large handles 3-6 concurrent agents)
-- **Alternative**: Single VM with distrobox isolation between orchestrators
-- **Access**: Tailscale or similar for secure private access
+```
+┌─────────────────────────────────────────────────┐
+│  EC2 / VM                                       │
+│  ┌───────────────────────────────────────────┐  │
+│  │  distrobox: dev                           │  │
+│  │  └── nix develop .#schmux                 │  │
+│  │      └── schmux daemon + tmux sessions    │  │
+│  └───────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────┘
+```
+
+**Sizing**: t3.large (2 vCPU, 8GB) handles 3-6 concurrent agents. Memory-bound, not CPU-bound.
+
+**Access**: Use Tailscale for secure private access to dashboards (schmux: `:7337`, etc.)
 
 ## Why agentboxes?
 
-- **No system pollution** - Everything runs in isolated Nix shells
-- **Reproducible** - Same environment on any machine via `flake.lock`
-- **Multiple deployment targets** - Local dev, EC2 instances, distrobox containers
-- **Easy comparison** - Try multiple orchestrators side-by-side
+- **Reproducible** - Same environment anywhere via `flake.lock`
+- **No system pollution** - Everything in isolated Nix shells
+- **Persistent when needed** - distrobox for long-running orchestrators
+- **Batteries included** - 61 modern CLI tools in the substrate layer
 
 ## Project Structure
 
@@ -232,7 +202,7 @@ agentboxes/
 ## Related Projects
 
 - [numtide/llm-agents.nix](https://github.com/numtide/llm-agents.nix) - Source for all agent packages
-- [cautomaton-develops](https://github.com/farra/cautomaton-develops) - Foundation this builds on
+- [distrobox](https://github.com/89luca89/distrobox) - Run containers as if on host
 
 ## License
 
