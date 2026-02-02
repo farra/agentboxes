@@ -24,7 +24,7 @@
     # User management (shadow package)
     "shadow"
     # Process & system utilities
-    "procps" "lsof" "util-linux" "time" "hostname" "glibc.bin"
+    "procps" "lsof" "util-linux" "time" "hostname" "getent"
     # Filesystem
     "diffutils" "findutils"
     # Security & crypto
