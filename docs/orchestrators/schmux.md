@@ -8,33 +8,59 @@ Multi-agent AI orchestration using tmux sessions.
 
 schmux creates isolated workspaces (git clones) for each agent session, running them in separate tmux sessions. This allows multiple AI agents to work on the same codebase simultaneously without conflicts. A web dashboard at `http://localhost:7337` provides real-time monitoring and session management.
 
-## Installation
+## Quick Try
+
+To explore schmux without setting up a project:
 
 ```bash
 nix develop github:farra/agentboxes#schmux
+schmux start
+open http://localhost:7337
 ```
 
 For other deployment options (Docker, distrobox, OCI images), see the [main README](../../README.md#how-to-run-these-environments).
 
-## Getting Started
+## Project Setup
+
+For real development work, create an `agentbox.toml` in your project that includes the orchestrator, language runtimes, and tools you need.
+
+### Example: Reviewing the beads project
+
+[beads](https://github.com/steveyegge/beads) is a Go project that needs Go for building/testing. Here's how to set up an environment for reviewing it with schmux:
 
 ```bash
-# Start the daemon (first run creates config interactively)
-schmux start
-
-# Open the dashboard
-open http://localhost:7337
+git clone https://github.com/steveyegge/beads.git
+cd beads
 ```
 
-On first run, schmux guides you through configuration.
+Create `agentbox.toml`:
 
-## Example: Code Review
+```toml
+[orchestrator]
+name = "schmux"
 
-This walkthrough demonstrates reviewing [Yegge's beads](https://github.com/steveyegge/beads) repository.
+[bundles]
+include = ["complete"]
 
-### Step 1: Create Configuration
+[tools]
+go = "1.23"  # beads is written in Go
 
-If not created during first run, create `~/.schmux/config.json`:
+[llm-agents]
+include = ["claude-code"]
+```
+
+Initialize and enter the environment:
+
+```bash
+nix flake init -t github:farra/agentboxes#project
+nix develop
+```
+
+Now you have schmux, Go 1.23, Claude Code, and 61 CLI tools available. The agent can actually build and test the code, not just read it.
+
+### Configure schmux
+
+Create `~/.schmux/config.json`:
 
 ```json
 {
@@ -52,7 +78,6 @@ If not created during first run, create `~/.schmux/config.json`:
       "command": "claude"
     }
   ],
-  "quick_launch": [],
   "terminal": {
     "width": 120,
     "height": 40,
@@ -61,68 +86,33 @@ If not created during first run, create `~/.schmux/config.json`:
 }
 ```
 
-### Step 2: Start the Daemon
+### Start the review
 
 ```bash
 schmux start
-schmux status  # Verify running, shows dashboard URL
+schmux spawn -t claude -r beads -p "Review this Go codebase. Run 'make test' to verify tests pass, then analyze code quality, error handling, and test coverage."
 ```
 
-### Step 3: Spawn a Code Review Agent
+The agent has Go available, so it can run `make build`, `make test`, and understand the actual behavior—not just static analysis.
 
-Via CLI:
-```bash
-schmux spawn -t claude -r beads -p "Review this codebase for code quality, architecture, and potential improvements. Focus on: 1) Code organization 2) Error handling 3) Testing coverage 4) Documentation quality"
-```
-
-Or via the web dashboard at `http://localhost:7337`:
-1. Click "New Session"
-2. Select repository: `beads`
-3. Select target: `claude`
-4. Enter prompt for code review task
-5. Click "Spawn"
-
-### Step 4: Monitor Progress
+### Monitor progress
 
 ```bash
 schmux list          # Show active sessions
-schmux attach <id>   # Attach to tmux session to watch
+schmux attach <id>   # Attach to tmux session
 ```
 
-Or use the dashboard's real-time terminal streaming.
-
-## Using agentbox.toml
-
-For project-based configuration, create a `agentbox.toml`:
-
-```toml
-[orchestrator]
-name = "schmux"
-
-[bundles]
-include = ["complete"]
-
-[llm-agents]
-include = ["claude-code"]
-```
-
-Then:
-```bash
-nix flake init -t github:farra/agentboxes#project
-# Edit agentbox.toml as above
-nix develop
-schmux start
-```
+Or use the dashboard at `http://localhost:7337`.
 
 ## What's Included
 
-The agentboxes distribution provides:
+When you use the schmux orchestrator, you get:
 
-- **schmux binary** (v1.1.1) - pre-built from GitHub releases
-- **Dashboard assets** - React web UI for monitoring sessions
+- **schmux binary** - pre-built from GitHub releases
+- **Dashboard** - React web UI for monitoring sessions
 - **Substrate tools** - git, jq, ripgrep, fd, fzf, tmux, htop, curl, rsync, and more
 
-You do NOT need Go or Node.js installed - the binary is pre-built.
+Your `agentbox.toml` adds project-specific tools (Go, Python, Node.js, etc.) so agents can build and test the code.
 
 ## CLI Reference
 
@@ -189,7 +179,7 @@ Common causes: invalid config.json, missing `terminal` block, port 7337 in use.
 Ensure you're using the packaged binary, not a separately installed one.
 
 ### tmux not found
-Run from within `nix develop .#schmux` or ensure the binary wrapper is used.
+Run from within `nix develop` or ensure the binary wrapper is used.
 
 ## Links
 

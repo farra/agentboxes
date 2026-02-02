@@ -15,89 +15,32 @@ Gas Town coordinates multiple AI agents through persistent work tracking using g
 - **Hooks**: Git worktree-based persistent storage surviving crashes
 - **Convoys**: Work tracking bundles aggregating multiple tasks (beads)
 
-## Installation
+## Quick Try
+
+To explore gastown without setting up a project:
 
 ```bash
 nix develop github:farra/agentboxes#gastown
+gt install ~/gt
+gt doctor
 ```
 
 For other deployment options (Docker, distrobox, OCI images), see the [main README](../../README.md#how-to-run-these-environments).
 
-## Getting Started
+## Project Setup
+
+For real development work, create an `agentbox.toml` in your project that includes the orchestrator, language runtimes, and tools you need.
+
+### Example: Reviewing the beads project
+
+[beads](https://github.com/steveyegge/beads) is a Go project. To review it with gastown, you need Go available so agents can build and test the code:
 
 ```bash
-# Install workspace (first-time setup)
-gt install ~/gt
-
-# Verify setup
-gt doctor
-gt status
+git clone https://github.com/steveyegge/beads.git
+cd beads
 ```
 
-## Example: Code Review
-
-This walkthrough demonstrates reviewing [Yegge's beads](https://github.com/steveyegge/beads) repository.
-
-### Step 1: Add the Repository
-
-```bash
-gt rig add beads https://github.com/steveyegge/beads.git
-```
-
-### Step 2: Initialize Beads for Task Tracking
-
-Gas Town uses beads for work tracking. Initialize it in the beads rig:
-
-```bash
-cd ~/gt/rigs/beads
-bd init
-
-# Create beads for the code review task
-bd add "Code review: Analyze architecture, code quality, and documentation"
-bd add "Review error handling patterns"
-bd add "Assess test coverage"
-bd add "Document improvement recommendations"
-```
-
-### Step 3: Create a Convoy
-
-Convoys group related work items:
-
-```bash
-gt convoy create --name "beads-code-review" --rig beads
-gt convoy add beads-code-review <bead-id>
-```
-
-### Step 4: Launch the Mayor
-
-The Mayor coordinates the review:
-
-```bash
-gt mayor attach
-```
-
-The Mayor will analyze the codebase, create work items as beads, spawn polecat agents, and track progress via convoys.
-
-### Step 5: Assign Work to Agents
-
-Use `gt sling` to assign specific beads to rigs:
-
-```bash
-gt sling <bead-id> beads
-gt agents  # Monitor active agents
-```
-
-### Step 6: Monitor Progress
-
-```bash
-gt convoy status beads-code-review
-gt status
-gt agents
-```
-
-## Using agentbox.toml
-
-For project-based configuration, create a `agentbox.toml`:
+Create `agentbox.toml`:
 
 ```toml
 [orchestrator]
@@ -106,43 +49,76 @@ name = "gastown"
 [bundles]
 include = ["complete"]
 
+[tools]
+go = "1.23"  # beads is written in Go
+
 [llm-agents]
 include = ["claude-code"]
 ```
 
-Then:
+Initialize and enter the environment:
+
 ```bash
 nix flake init -t github:farra/agentboxes#project
-# Edit agentbox.toml as above
 nix develop
+```
+
+Now you have gastown, beads (bd), Go 1.23, Claude Code, and 61 CLI tools. Agents can run `make build` and `make test`.
+
+### Set up gastown workspace
+
+```bash
 gt install ~/gt
+gt rig add beads https://github.com/steveyegge/beads.git
+gt doctor
+```
+
+### Create tasks with beads
+
+```bash
+cd ~/gt/rigs/beads
+bd init
+bd add "Review architecture and code organization"
+bd add "Analyze error handling patterns"
+bd add "Assess test coverage - run 'make test'"
+bd add "Document improvement recommendations"
+```
+
+### Create a convoy and start
+
+```bash
+gt convoy create --name "beads-review" --rig beads
+gt mayor attach
+```
+
+The Mayor will analyze the codebase, spawn agents, and track progress. Agents have Go available, so they can actually run the build and tests.
+
+### Monitor progress
+
+```bash
+gt convoy status beads-review
+gt status
+gt agents
 ```
 
 ## What's Included
 
-The agentboxes distribution provides:
+When you use the gastown orchestrator, you get:
 
-- **gt binary** (v0.5.0) - pre-built from GitHub releases
-- **beads (bd)** (v0.49.3) - work tracking system
+- **gt binary** - pre-built from GitHub releases
+- **beads (bd)** - work tracking system
 - **SQLite** - for convoy database queries
 - **Substrate tools** - git, jq, ripgrep, fd, fzf, tmux, htop, curl, rsync, and more
 
-You do NOT need Go installed - the binaries are pre-built.
+Your `agentbox.toml` adds project-specific tools (Go, Python, Node.js, etc.) so agents can build and test the code.
 
 ## Configuration
 
 ### Agent Configuration
 
-Configure your preferred AI runtime:
-
 ```bash
-# List available agents
 gt config agent list
-
-# Set default agent
 gt config agent default claude
-
-# Create custom agent alias
 gt config agent add myagent --model claude-3-opus --flags "--verbose"
 ```
 
