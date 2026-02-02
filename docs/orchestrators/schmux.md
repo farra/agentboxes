@@ -8,81 +8,29 @@ Multi-agent AI orchestration using tmux sessions.
 
 schmux creates isolated workspaces (git clones) for each agent session, running them in separate tmux sessions. This allows multiple AI agents to work on the same codebase simultaneously without conflicts. A web dashboard at `http://localhost:7337` provides real-time monitoring and session management.
 
-## Getting Started: Code Review Example
-
-This walkthrough demonstrates reviewing [Yegge's beads](https://github.com/steveyegge/beads) repository using schmux.
-
-### Option A: Using Nix (Recommended)
+## Installation
 
 ```bash
-# Enter the schmux environment
 nix develop github:farra/agentboxes#schmux
+```
 
+For other deployment options (Docker, distrobox, OCI images), see the [main README](../../README.md#how-to-run-these-environments).
+
+## Getting Started
+
+```bash
 # Start the daemon (first run creates config interactively)
 schmux start
 
 # Open the dashboard
-open http://localhost:7337  # or browse manually
+open http://localhost:7337
 ```
 
-On first run, schmux guides you through configuration. When prompted:
-1. Accept the default workspace directory (`~/schmux-workspaces`) or specify another
-2. Add the beads repository when prompted for repos
+On first run, schmux guides you through configuration.
 
-### Option B: Using Pre-built Image + Distrobox (Recommended for Persistent Use)
+## Example: Code Review
 
-```bash
-# Build the pre-built schmux image (everything included)
-nix build github:farra/agentboxes#schmux-image
-docker load < result
-
-# Create and enter distrobox container
-distrobox create --image agentbox:latest --name schmux-box
-distrobox enter schmux-box
-
-# Just works - schmux is pre-installed!
-schmux start
-```
-
-Distrobox shares your `$HOME`, so SSH keys, dotfiles, and `~/.schmux` config persist across sessions.
-
-### Option C: Using Docker
-
-```bash
-# Build the pre-built schmux image
-nix build github:farra/agentboxes#schmux-image
-docker load < result
-
-# Run interactively with volume mounts for persistence
-docker run -it \
-  -v ~/.schmux:/root/.schmux \
-  -v ~/schmux-workspaces:/root/schmux-workspaces \
-  -p 7337:7337 \
-  agentbox:latest
-
-# schmux is pre-installed
-schmux start
-```
-
-### Option D: Using Base Image + nix develop (Runtime Flexibility)
-
-Use this if you need to switch between orchestrators or install additional tools:
-
-```bash
-# Build the base image (includes nix with flakes)
-nix build github:farra/agentboxes#base-image
-docker load < result
-
-# Create distrobox
-distrobox create --image agentboxes-base:latest --name dev
-distrobox enter dev
-
-# Install schmux at runtime
-nix develop github:farra/agentboxes#schmux
-schmux start
-```
-
-## Configuring for Beads Code Review
+This walkthrough demonstrates reviewing [Yegge's beads](https://github.com/steveyegge/beads) repository.
 
 ### Step 1: Create Configuration
 

@@ -10,16 +10,17 @@ OpenClaw is a **messaging gateway** that routes conversations from various platf
 
 **Note**: OpenClaw is best suited for conversational AI tasks rather than autonomous code reviews. For dedicated code review workflows, consider [schmux](schmux.md) or [gastown](gastown.md) instead.
 
-## Getting Started: Code Analysis via Chat
-
-While OpenClaw isn't designed for autonomous code orchestration, you can use it to interact with AI agents for code-related questions and analysis via messaging. This walkthrough shows how to set up OpenClaw and use it for code discussions about [Yegge's beads](https://github.com/steveyegge/beads).
-
-### Option A: Using Nix (Recommended)
+## Installation
 
 ```bash
-# Enter the openclaw environment
 nix develop github:farra/agentboxes#openclaw
+```
 
+For other deployment options (Docker, distrobox, OCI images), see the [main README](../../README.md#how-to-run-these-environments).
+
+## Getting Started
+
+```bash
 # Run the onboarding wizard
 openclaw onboard --install-daemon
 
@@ -27,86 +28,20 @@ openclaw onboard --install-daemon
 openclaw gateway run
 ```
 
-### Option B: Using Pre-built Image + Distrobox (Recommended for Persistent Use)
+## Example: Code Analysis via Chat
 
-```bash
-# Build the pre-built openclaw image (everything included)
-nix build github:farra/agentboxes#openclaw-image
-docker load < result
+While OpenClaw isn't designed for autonomous code orchestration, you can use it to interact with AI agents for code-related questions. This walkthrough shows how to discuss [Yegge's beads](https://github.com/steveyegge/beads) via messaging.
 
-# Create and enter distrobox
-distrobox create --image agentbox:latest --name openclaw-box
-distrobox enter openclaw-box
-
-# openclaw is pre-installed!
-openclaw onboard --install-daemon
-openclaw gateway run
-```
-
-Distrobox shares your `$HOME`, so `~/.config/openclaw`, SSH keys, and dotfiles persist across sessions.
-
-### Option C: Using Docker
-
-```bash
-# Build the pre-built openclaw image
-nix build github:farra/agentboxes#openclaw-image
-docker load < result
-
-# Run with port exposure for gateway
-docker run -it \
-  -v ~/.config/openclaw:/root/.config/openclaw \
-  -p 18789:18789 \
-  agentbox:latest
-
-# openclaw is pre-installed
-openclaw onboard --install-daemon
-openclaw gateway run
-```
-
-### Option D: Using Base Image + nix develop (Runtime Flexibility)
-
-Use this if you need to switch between orchestrators or install additional tools:
-
-```bash
-# Build the base image (includes nix with flakes)
-nix build github:farra/agentboxes#base-image
-docker load < result
-
-# Create distrobox
-distrobox create --image agentboxes-base:latest --name dev
-distrobox enter dev
-
-# Install openclaw at runtime
-nix develop github:farra/agentboxes#openclaw
-openclaw onboard --install-daemon
-```
-
-## Configuring for Code Discussions
-
-### Step 1: Complete Onboarding
-
-The onboarding wizard configures:
-- AI provider (Claude, OpenAI, etc.)
-- Messaging channel integrations
-- Gateway settings
-
-```bash
-openclaw onboard --install-daemon
-```
-
-### Step 2: Configure a Channel
+### Step 1: Configure a Channel
 
 Connect your preferred messaging platform:
 
 ```bash
-# Check available channels
 openclaw channels status --probe
-
-# Configure a channel (e.g., Telegram)
 openclaw config set telegram.bot_token "YOUR_BOT_TOKEN"
 ```
 
-### Step 3: Clone the Repository Locally
+### Step 2: Clone the Repository Locally
 
 Since OpenClaw doesn't manage workspaces like schmux, clone the repo you want to discuss:
 
@@ -114,13 +49,13 @@ Since OpenClaw doesn't manage workspaces like schmux, clone the repo you want to
 git clone https://github.com/steveyegge/beads.git ~/projects/beads
 ```
 
-### Step 4: Start the Gateway
+### Step 3: Start the Gateway
 
 ```bash
 openclaw gateway run
 ```
 
-### Step 5: Chat About Code
+### Step 4: Chat About Code
 
 Through your connected messaging app, you can now:
 - Ask questions about the beads codebase

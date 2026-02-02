@@ -15,149 +15,83 @@ Gas Town coordinates multiple AI agents through persistent work tracking using g
 - **Hooks**: Git worktree-based persistent storage surviving crashes
 - **Convoys**: Work tracking bundles aggregating multiple tasks (beads)
 
-## Getting Started: Code Review Example
-
-This walkthrough demonstrates reviewing [Yegge's beads](https://github.com/steveyegge/beads) repository using Gas Town.
-
-### Option A: Using Nix (Recommended)
+## Installation
 
 ```bash
-# Enter the gastown environment
 nix develop github:farra/agentboxes#gastown
+```
 
+For other deployment options (Docker, distrobox, OCI images), see the [main README](../../README.md#how-to-run-these-environments).
+
+## Getting Started
+
+```bash
 # Install workspace (first-time setup)
 gt install ~/gt
-
-# Add the beads repository as a rig
-gt rig add beads https://github.com/steveyegge/beads.git
 
 # Verify setup
 gt doctor
 gt status
 ```
 
-### Option B: Using Pre-built Image + Distrobox (Recommended for Persistent Use)
+## Example: Code Review
+
+This walkthrough demonstrates reviewing [Yegge's beads](https://github.com/steveyegge/beads) repository.
+
+### Step 1: Add the Repository
 
 ```bash
-# Build the pre-built gastown image (everything included)
-nix build github:farra/agentboxes#gastown-image
-docker load < result
-
-# Create and enter distrobox container
-distrobox create --image agentbox:latest --name gastown-box
-distrobox enter gastown-box
-
-# gt and beads are pre-installed!
-gt install ~/gt
 gt rig add beads https://github.com/steveyegge/beads.git
 ```
 
-Distrobox shares your `$HOME`, so `~/gt` workspace, SSH keys, and dotfiles persist across sessions.
-
-### Option C: Using Docker
-
-```bash
-# Build the pre-built gastown image
-nix build github:farra/agentboxes#gastown-image
-docker load < result
-
-# Run interactively with persistent volume
-docker run -it \
-  -v ~/gt:/root/gt \
-  agentbox:latest
-
-# gt and beads are pre-installed
-gt install ~/gt
-gt rig add beads https://github.com/steveyegge/beads.git
-```
-
-### Option D: Using Base Image + nix develop (Runtime Flexibility)
-
-Use this if you need to switch between orchestrators or install additional tools:
-
-```bash
-# Build the base image (includes nix with flakes)
-nix build github:farra/agentboxes#base-image
-docker load < result
-
-# Create distrobox
-distrobox create --image agentboxes-base:latest --name dev
-distrobox enter dev
-
-# Install gastown at runtime
-nix develop github:farra/agentboxes#gastown
-gt install ~/gt
-```
-
-## Running a Code Review
-
-### Step 1: Initialize Beads for Task Tracking
+### Step 2: Initialize Beads for Task Tracking
 
 Gas Town uses beads for work tracking. Initialize it in the beads rig:
 
 ```bash
-# Navigate to the rig
 cd ~/gt/rigs/beads
-
-# Initialize beads (if not already done)
 bd init
 
-# Create a bead for the code review task
+# Create beads for the code review task
 bd add "Code review: Analyze architecture, code quality, and documentation"
 bd add "Review error handling patterns"
 bd add "Assess test coverage"
 bd add "Document improvement recommendations"
 ```
 
-### Step 2: Create a Convoy
+### Step 3: Create a Convoy
 
 Convoys group related work items:
 
 ```bash
-# Create a convoy for the code review
 gt convoy create --name "beads-code-review" --rig beads
-
-# Add beads to the convoy (if using existing beads)
 gt convoy add beads-code-review <bead-id>
 ```
 
-### Step 3: Launch the Mayor
+### Step 4: Launch the Mayor
 
 The Mayor coordinates the review:
 
 ```bash
-# Attach to the Mayor for interactive coordination
 gt mayor attach
-
-# The Mayor will:
-# - Analyze the codebase
-# - Create work items as beads
-# - Spawn polecat agents to complete tasks
-# - Track progress via convoys
 ```
 
-### Step 4: Assign Work to Agents
+The Mayor will analyze the codebase, create work items as beads, spawn polecat agents, and track progress via convoys.
+
+### Step 5: Assign Work to Agents
 
 Use `gt sling` to assign specific beads to rigs:
 
 ```bash
-# Sling a bead to an agent working on the beads rig
 gt sling <bead-id> beads
-
-# Monitor active agents
-gt agents
+gt agents  # Monitor active agents
 ```
 
-### Step 5: Monitor Progress
+### Step 6: Monitor Progress
 
 ```bash
-# Check convoy status
 gt convoy status beads-code-review
-
-# View all active work
 gt status
-
-# Check agent status
 gt agents
 ```
 
