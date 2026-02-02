@@ -106,9 +106,10 @@ let
   # =========================================================================
 
   # Map distrobox bundle names to actual packages
-  # Some names need special handling (e.g., xorg.xauth is nested)
+  # Some names need special handling (e.g., xorg.xauth is nested, glibc.bin for getent)
   mapDistroboxTool = name:
     if name == "xorg.xauth" then pkgs.xorg.xauth
+    else if name == "glibc.bin" then pkgs.glibc.bin
     else pkgs.${name} or null;
 
   distroboxPackages = builtins.filter (p: p != null) (
