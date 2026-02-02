@@ -7,6 +7,15 @@
 
     # Single source for all AI coding agents (daily updates, binary cache)
     llm-agents.url = "github:numtide/llm-agents.nix";
+    llm-agents.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Rust toolchain support
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Nix User Repository (community packages)
+    nur.url = "github:nix-community/NUR";
+    nur.inputs.nixpkgs.follows = "nixpkgs";
 
     # Orchestrator sources (not yet in llm-agents.nix)
     ralph-src = {
@@ -15,7 +24,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, llm-agents, ralph-src }:
+  outputs = { self, nixpkgs, flake-utils, llm-agents, rust-overlay, nur, ralph-src }:
     let
       # System-independent outputs
       templates = {
@@ -31,9 +40,16 @@
       mkProjectOutputs = depsPath:
         flake-utils.lib.eachDefaultSystem (system:
           let
-            pkgs = nixpkgs.legacyPackages.${system};
+            # Apply rust-overlay for rust toolchain support
+            pkgs = import nixpkgs {
+              inherit system;
+              overlays = [ rust-overlay.overlays.default ];
+            };
             substrate = import ./lib/substrate.nix { inherit pkgs; };
             llmPkgs = llm-agents.packages.${system};
+
+            # Import NUR
+            nurPkgs = import nur { inherit pkgs; nurpkgs = pkgs; };
 
             # Import orchestrators
             orchestrators = {
@@ -52,28 +68,9 @@
               };
             };
 
-            # Import agents (wrapping llm-agents.nix packages)
-            agents = {
-              claude = import ./agents/claude {
-                inherit pkgs substrate;
-                claude-code = llmPkgs.claude-code;
-              };
-              codex = import ./agents/codex {
-                inherit pkgs substrate;
-                codex = llmPkgs.codex;
-              };
-              gemini = import ./agents/gemini {
-                inherit pkgs substrate;
-                gemini-cli = llmPkgs.gemini-cli;
-              };
-              opencode = import ./agents/opencode {
-                inherit pkgs substrate;
-                opencode = llmPkgs.opencode;
-              };
-            };
-
             mkProjectShell = import ./lib/mkProjectShell.nix {
-              inherit pkgs system substrate orchestrators agents;
+              inherit pkgs system substrate orchestrators nurPkgs;
+              llmAgentsPkgs = llmPkgs;
             };
           in {
             devShells.default = mkProjectShell depsPath;

@@ -115,34 +115,44 @@ agentboxes/
 
 ### deps.toml Format
 
-Project environments are configured via `deps.toml`:
+Project environments are configured via `deps.toml`. This format is aligned with [cautomaton-develops](https://github.com/farra/cautomaton-develops) for consistency:
 
 ```toml
-# Orchestrator (optional - omit for agent-only environments)
+# Orchestrator (optional) - agentboxes-specific
 [orchestrator]
 name = "schmux"  # schmux | gastown | openclaw | ralph
 
-# Agents to include (set to true to enable)
-[agents]
-claude = true
-codex = true
-gemini = true
-opencode = true
+# Tool bundles
+[bundles]
+include = ["complete"]  # baseline (28 tools) or complete (61 tools)
 
-# Language runtimes with version pinning
-[runtimes]
+# Language runtimes and tools
+[tools]
 python = "3.12"
 nodejs = "20"
-go = "1.23"
+# go = "1.23"
+# rust = "stable"  # "stable", "beta", "nightly", or "1.75.0"
 
-# Tool bundles
-# - baseline: 28 essential modern CLI tools
-# - complete: 61 tools (baseline + extras)
-[bundles]
-include = ["complete"]
+# Rust components (when rust is enabled)
+# [rust]
+# components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]
+
+# AI coding agents from llm-agents.nix
+[llm-agents]
+include = ["claude-code"]
+# Available: claude-code, codex, gemini-cli, opencode, amp, goose-cli, aider, etc.
+
+# NUR packages (format: "owner/package")
+# [nur]
+# include = []
 ```
 
-The `mkProjectShell.nix` reads this and composes a devShell with substrate + orchestrator + agents + runtimes + bundle tools.
+**Differences from cautomaton-develops:**
+- `[orchestrator]` section (agentboxes-only) - multi-agent coordinators
+- Pre-built devShells (`nix develop .#schmux`, `.#claude`, etc.)
+- OCI image building support
+
+The `mkProjectShell.nix` reads this and composes a devShell with substrate + orchestrator + agents + tools + bundle tools.
 
 ## Build & Test Commands
 

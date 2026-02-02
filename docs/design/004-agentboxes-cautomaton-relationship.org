@@ -1,0 +1,134 @@
+#+TITLE: 004 - Agentboxes and Cautomaton-Develops Relationship
+#+AUTHOR: jaaron
+#+STATUS: Draft
+#+CATEGORY: infra
+#+CREATED: [2026-02-01]
+#+LAST_MODIFIED: [2026-02-01]
+#+SETUPFILE: ../../org-setup.org
+
+* Summary
+
+This document captures the architectural decision about the relationship between
+agentboxes and cautomaton-develops: whether to make cautomaton-develops a
+reusable library or keep them as separate-but-aligned projects.
+
+* Motivation
+
+Both projects share similar patterns:
+- =deps.toml= configuration format
+- Tool bundles (baseline, complete)
+- =mkDevShell= composition
+- Integration with =llm-agents.nix= and NUR
+
+The question arose: should cautomaton-develops become a library that agentboxes
+imports, or should they remain independent projects that share patterns?
+
+* Design
+
+** Option A: Make cautomaton-develops a library
+
+agentboxes would import cautomaton-develops as a flake input and extend it.
+
+#+begin_src nix
+inputs.cautomaton-develops.url = "github:farra/cautomaton-develops";
+
+# Use its lib functions
+devShells = cautomaton-develops.lib.mkDevShell { ... };
+#+end_src
+
+*** Pros
+- Single source of truth for deps.toml parsing, bundles, tool resolution
+- Changes to base pattern only happen in one place
+- agentboxes becomes thinner (just orchestrators + deployment)
+
+*** Cons
+- Adds complexity to cautomaton-develops (library consumers, API stability)
+- Violates stated goal: "not be as complicated as devenv or devshell"
+- Creates dependency chain that must be managed
+- Two projects serving different audiences now coupled
+
+** Option B: Separate but aligned projects (RECOMMENDED)
+
+Both projects independently implement the same patterns. They share mental
+models but not code.
+
+#+begin_src
+cautomaton-develops              agentboxes
+---------------------            ----------------------
+General-purpose dev              AI orchestration focus
+environments
+
+Template users copy              Pre-built shells + template
+and own
+
+deps.toml:                       deps.toml:
+  [tools]                          [orchestrator]
+  [bundles]                        [llm-agents]
+  [llm-agents]                     [bundles]
+  [nur]                            [tools]
+#+end_src
+
+*** Pros
+- cautomaton-develops stays simple (its stated goal)
+- Each project evolves for its audience
+- No dependency management between them
+- Template model: users copy and own their config
+
+*** Cons
+- Some pattern duplication
+- Could drift apart over time (acceptable - they serve different purposes)
+
+* Decision
+
+**Option B: Separate but aligned projects.**
+
+Rationale:
+1. cautomaton-develops explicitly aims to be simpler than devenv/devshell
+2. Making it a library contradicts that goal
+3. The shared pattern (~100 lines of Nix) is simple enough that duplication is acceptable
+4. Different audiences benefit from different defaults
+
+agentboxes should:
+- Mirror the =deps.toml= pattern from cautomaton-develops
+- Use direct =[llm-agents]= section (matching upstream)
+- Add =[orchestrator]= section for AI-specific functionality
+- Provide pre-built shells (=nix develop .#schmux=) that cautomaton-develops doesn't
+
+* Tasks
+:PROPERTIES:
+:CATEGORY: tasks
+:END:
+
+** TODO [AB-004-01] Align deps.toml format with cautomaton-develops        :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Update agentboxes =mkProjectShell.nix= to use the same =deps.toml= structure as
+cautomaton-develops:
+- Direct =[llm-agents]= section instead of wrapper
+- Direct =[nur]= section
+- Same bundle names and semantics
+
+** TODO [AB-004-02] Document the pattern divergence points                 :p2:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+In CLAUDE.md or a separate doc, note where agentboxes intentionally differs:
+- =[orchestrator]= section (agentboxes-only)
+- Pre-built devShells for orchestrators
+- OCI image building
+
+* Questions
+:PROPERTIES:
+:CATEGORY: questions
+:END:
+
+** DECIDED Should cautomaton-develops become a library?
+:PROPERTIES:
+:DECIDED: [2026-02-01]
+:END:
+
+No. Keep them separate but aligned. cautomaton-develops stays simple
+(template-based), agentboxes adds AI orchestration specifics.

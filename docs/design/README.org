@@ -26,6 +26,7 @@ Each document captures a decision, its rationale, and implementation tasks.
 | 001 | [[file:001-layered-runtime-architecture.org][Layered Runtime Architecture]]   | Active |
 | 002 | [[file:002-composable-agent-environments.org][Composable Agent Environments]]  | Active |
 | 003 | [[file:003-ralph-wiggum-orchestrator.org][Ralph Wiggum Orchestrator]]      | Draft  |
+| 004 | [[file:004-agentboxes-cautomaton-relationship.org][Agentboxes/Cautomaton Relationship]] | Draft  |
 
 * Elisp Setup
 :PROPERTIES:

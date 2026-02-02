@@ -10,22 +10,30 @@
 [orchestrator]
 name = "schmux"
 
-# AI Agents - set to true to include
-# Available: claude, codex (gemini, opencode planned)
-[agents]
-claude = true
-# codex = true
-# gemini = true
-# opencode = true
-
-# Language runtimes with version pinning
-[runtimes]
-python = "3.12"
-nodejs = "20"
-# go = "1.23"
-
 # Tool bundles
 # - baseline: 28 essential modern CLI tools
 # - complete: 61 tools (baseline + extras)
 [bundles]
 include = ["complete"]
+
+# Language runtimes and tools
+[tools]
+python = "3.12"
+nodejs = "20"
+# go = "1.23"
+# rust = "stable"  # "stable", "beta", "nightly", or "1.75.0"
+
+# Rust components (when rust is enabled in [tools])
+# [rust]
+# components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]
+
+# AI coding agents from llm-agents.nix
+# https://github.com/numtide/llm-agents.nix
+[llm-agents]
+include = ["claude-code"]
+# Available: claude-code, codex, gemini-cli, opencode, amp, goose-cli, aider, etc.
+
+# NUR packages (format: "owner/package")
+# https://github.com/nix-community/NUR
+# [nur]
+# include = []

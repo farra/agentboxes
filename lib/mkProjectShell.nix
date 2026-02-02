@@ -5,26 +5,31 @@
 #
 # Usage:
 #   mkProjectShell {
-#     inherit pkgs system substrate orchestrators agents;
+#     inherit pkgs system substrate orchestrators llmAgentsPkgs nurPkgs;
 #   } ./deps.toml
 #
-# deps.toml format:
-#   [orchestrator]
+# deps.toml format (aligned with cautomaton-develops):
+#   [orchestrator]      # agentboxes-specific
 #   name = "schmux"
-#
-#   [agents]
-#   claude = true
-#   codex = true
-#
-#   [runtimes]
-#   python = "3.12"
-#   nodejs = "20"
-#   go = "1.23"
 #
 #   [bundles]
 #   include = ["complete"]
+#
+#   [tools]
+#   python = "3.12"
+#   nodejs = "20"
+#   rust = "stable"
+#
+#   [rust]
+#   components = ["rustfmt", "clippy"]
+#
+#   [llm-agents]
+#   include = ["claude-code"]
+#
+#   [nur]
+#   include = ["owner/package"]
 
-{ pkgs, system, substrate ? [], orchestrators ? {}, agents ? {} }:
+{ pkgs, system, substrate ? [], orchestrators ? {}, llmAgentsPkgs ? {}, nurPkgs ? null }:
 
 depsPath:
 
@@ -35,7 +40,11 @@ let
   # Load bundle definitions
   bundles = import ./bundles.nix;
 
-  # Version mappings for runtimes with non-standard naming
+  # =========================================================================
+  # Tool Resolution (aligned with cautomaton-develops)
+  # =========================================================================
+
+  # Version mappings for tools with non-standard naming
   versionMap = {
     python = {
       "3.10" = pkgs.python310;
@@ -56,24 +65,55 @@ let
     };
   };
 
-  # Map a runtime name + version to a package
-  mapRuntime = name: version:
+  # Map a tool name + version to a package
+  # Skip rust here - handled separately via getRustToolchain
+  mapTool = name: version:
     let
       fromVersionMap = versionMap.${name}.${version} or null;
       fromPkgs = pkgs.${name} or null;
     in
-      if fromVersionMap != null then fromVersionMap
+      if name == "rust" then null
+      else if fromVersionMap != null then fromVersionMap
       else if fromPkgs != null then fromPkgs
-      else builtins.trace "Warning: Unknown runtime ${name} ${version}" null;
+      else builtins.trace "Warning: Unknown tool ${name} ${version}" null;
 
-  # Resolve runtimes from deps.toml
-  runtimePackages = builtins.filter (p: p != null) (
+  # Support both old [runtimes] and new [tools] section names
+  toolsSection = deps.tools or deps.runtimes or {};
+
+  # Resolve tools from deps.toml (excluding rust)
+  toolPackages = builtins.filter (p: p != null) (
     builtins.attrValues (
-      builtins.mapAttrs mapRuntime (deps.runtimes or {})
+      builtins.mapAttrs mapTool toolsSection
     )
   );
 
-  # Resolve bundles from deps.toml
+  # =========================================================================
+  # Rust Toolchain (via rust-overlay)
+  # =========================================================================
+
+  getRustToolchain = let
+    version = toolsSection.rust or null;
+    components = deps.rust.components or [ "rustfmt" "clippy" ];
+
+    toolchain =
+      if version == "stable" then pkgs.rust-bin.stable.latest.default
+      else if version == "beta" then pkgs.rust-bin.beta.latest.default
+      else if version == "nightly" then pkgs.rust-bin.nightly.latest.default
+      else if version != null then
+        # Specific version like "1.75.0"
+        pkgs.rust-bin.stable.${version}.default
+      else null;
+  in
+    if toolchain != null then
+      toolchain.override { extensions = components; }
+    else null;
+
+  rustPackages = if getRustToolchain != null then [ getRustToolchain ] else [];
+
+  # =========================================================================
+  # Bundles
+  # =========================================================================
+
   includedBundles = deps.bundles.include or [ "complete" ];
   bundleToolNames = builtins.concatLists (
     map (name: bundles.${name} or []) includedBundles
@@ -84,7 +124,10 @@ let
     map (name: pkgs.${name} or null) bundleToolNames
   );
 
-  # Resolve orchestrator
+  # =========================================================================
+  # Orchestrator (agentboxes-specific)
+  # =========================================================================
+
   orchestratorName = deps.orchestrator.name or null;
   orchestrator = if orchestratorName != null
     then orchestrators.${orchestratorName} or null
@@ -93,27 +136,72 @@ let
     then [ orchestrator.package ]
     else [];
 
-  # Resolve agents
-  agentNames = builtins.attrNames (deps.agents or {});
-  enabledAgents = builtins.filter (name: deps.agents.${name} == true) agentNames;
+  # =========================================================================
+  # LLM Agents (aligned with cautomaton-develops)
+  # =========================================================================
+
+  # New format: [llm-agents] include = ["claude-code"]
+  llmAgentNames = deps.llm-agents.include or [];
+
+  # Backwards compat: [agents] claude = true -> claude-code
+  legacyNameMap = {
+    claude = "claude-code";
+    codex = "codex";
+    gemini = "gemini-cli";
+    opencode = "opencode";
+  };
+  legacyAgentNames = map (n: legacyNameMap.${n} or n)
+    (builtins.filter (n: deps.agents.${n} == true) (builtins.attrNames (deps.agents or {})));
 
   # Auto-include agents for agent-specific orchestrators
-  # Ralph always requires Claude Code
+  # Ralph always requires claude-code
   autoIncludedAgents =
-    if orchestratorName == "ralph" then [ "claude" ]
+    if orchestratorName == "ralph" then [ "claude-code" ]
     else [];
 
-  # Combine enabled + auto-included (unique to avoid duplicates)
-  allAgents = pkgs.lib.unique (enabledAgents ++ autoIncludedAgents);
+  # Combine all agent names (unique)
+  allAgentNames = pkgs.lib.unique (llmAgentNames ++ legacyAgentNames ++ autoIncludedAgents);
 
+  # Resolve agent names to packages from llm-agents.nix
   agentPackages = builtins.filter (p: p != null) (
-    map (name: (agents.${name} or {}).package or null) allAgents
+    map (name:
+      if builtins.hasAttr name llmAgentsPkgs
+      then llmAgentsPkgs.${name}
+      else builtins.trace "Warning: Unknown llm-agent: ${name}. See github:numtide/llm-agents.nix" null
+    ) allAgentNames
   );
 
-  # Build description for shellHook
+  # =========================================================================
+  # NUR Packages (aligned with cautomaton-develops)
+  # =========================================================================
+
+  getNurPackages = let
+    specs = deps.nur.include or [];
+    parseSpec = spec: let
+      parts = builtins.split "/" spec;
+      owner = builtins.elemAt parts 0;
+      pkg = builtins.elemAt parts 2;
+      repo = nurPkgs.repos.${owner} or null;
+    in
+      if nurPkgs == null then
+        builtins.trace "Warning: NUR not available, skipping ${spec}" null
+      else if repo == null then
+        builtins.trace "Warning: Unknown NUR repo: ${owner}" null
+      else if !(builtins.hasAttr pkg repo) then
+        builtins.trace "Warning: Unknown NUR package: ${spec}" null
+      else
+        repo.${pkg};
+  in builtins.filter (p: p != null) (map parseSpec specs);
+
+  nurPackages = getNurPackages;
+
+  # =========================================================================
+  # Build Description
+  # =========================================================================
+
   description = builtins.concatStringsSep " + " (
     (if orchestratorName != null then [ orchestratorName ] else [])
-    ++ (if allAgents != [] then [ (builtins.concatStringsSep ", " allAgents) ] else [])
+    ++ (if allAgentNames != [] then [ (builtins.concatStringsSep ", " allAgentNames) ] else [])
     ++ (if includedBundles != [] then [ "[${builtins.concatStringsSep ", " includedBundles}]" ] else [])
   );
 
@@ -122,11 +210,14 @@ in pkgs.mkShell {
     substrate
     ++ orchestratorPackages
     ++ agentPackages
-    ++ runtimePackages
+    ++ toolPackages
+    ++ rustPackages
     ++ bundlePackages
+    ++ nurPackages
   );
 
   shellHook = ''
     echo "Project environment: ${description}"
+    ${if getRustToolchain != null then ''echo "Rust: $(rustc --version)"'' else ""}
   '';
 }
