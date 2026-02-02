@@ -36,42 +36,58 @@ gt doctor
 gt status
 ```
 
-### Option B: Using Docker
+### Option B: Using Pre-built Image + Distrobox (Recommended for Persistent Use)
 
 ```bash
-# Build and load the base image
-nix build github:farra/agentboxes#base-image
-docker load < result
-
-# Run interactively with persistent volume
-docker run -it \
-  -v ~/gt:/root/gt \
-  agentboxes-base:latest
-
-# Inside container, set up gastown
-nix develop github:farra/agentboxes#gastown
-gt install ~/gt
-gt rig add beads https://github.com/steveyegge/beads.git
-```
-
-### Option C: Using Distrobox (Recommended for Persistent Use)
-
-```bash
-# Build the base image
-nix build github:farra/agentboxes#base-image
+# Build the pre-built gastown image (everything included)
+nix build github:farra/agentboxes#gastown-image
 docker load < result
 
 # Create and enter distrobox container
-distrobox create --image agentboxes-base:latest --name gastown-box
+distrobox create --image agentbox:latest --name gastown-box
 distrobox enter gastown-box
 
-# Inside distrobox, set up gastown
-nix develop github:farra/agentboxes#gastown
+# gt and beads are pre-installed!
 gt install ~/gt
 gt rig add beads https://github.com/steveyegge/beads.git
 ```
 
 Distrobox shares your `$HOME`, so `~/gt` workspace, SSH keys, and dotfiles persist across sessions.
+
+### Option C: Using Docker
+
+```bash
+# Build the pre-built gastown image
+nix build github:farra/agentboxes#gastown-image
+docker load < result
+
+# Run interactively with persistent volume
+docker run -it \
+  -v ~/gt:/root/gt \
+  agentbox:latest
+
+# gt and beads are pre-installed
+gt install ~/gt
+gt rig add beads https://github.com/steveyegge/beads.git
+```
+
+### Option D: Using Base Image + nix develop (Runtime Flexibility)
+
+Use this if you need to switch between orchestrators or install additional tools:
+
+```bash
+# Build the base image (includes nix with flakes)
+nix build github:farra/agentboxes#base-image
+docker load < result
+
+# Create distrobox
+distrobox create --image agentboxes-base:latest --name dev
+distrobox enter dev
+
+# Install gastown at runtime
+nix develop github:farra/agentboxes#gastown
+gt install ~/gt
+```
 
 ## Running a Code Review
 

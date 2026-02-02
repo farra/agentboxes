@@ -37,51 +37,68 @@ ralph-enable
 ralph --monitor
 ```
 
-### Option B: Using Docker
+### Option B: Using Pre-built Image + Distrobox (Recommended for Persistent Use)
+
+```bash
+# Build the pre-built ralph image (everything included)
+nix build github:farra/agentboxes#ralph-image
+docker load < result
+
+# Create distrobox (one-time)
+distrobox create --image agentbox:latest --name ralph-box
+
+# Clone the repository (distrobox shares $HOME)
+git clone https://github.com/steveyegge/beads.git ~/projects/beads
+
+# Enter distrobox and work - ralph is pre-installed!
+distrobox enter ralph-box
+cd ~/projects/beads
+ralph-enable
+ralph --monitor
+```
+
+Distrobox shares your `$HOME`, so `~/projects`, SSH keys, `.ralph/` configs, and dotfiles persist across sessions.
+
+### Option C: Using Docker
 
 ```bash
 # Clone the repository
 git clone https://github.com/steveyegge/beads.git
 cd beads
 
-# Build and load the base image
-nix build github:farra/agentboxes#base-image
+# Build the pre-built ralph image
+nix build github:farra/agentboxes#ralph-image
 docker load < result
 
-# Run with project mounted
+# Run with project mounted - ralph is pre-installed
 docker run -it \
   -v $(pwd):/workspace \
   -w /workspace \
-  agentboxes-base:latest
+  agentbox:latest
 
-# Inside container
-nix develop github:farra/agentboxes#ralph
 ralph-enable
 ralph --monitor
 ```
 
-### Option C: Using Distrobox (Recommended for Persistent Use)
+### Option D: Using Base Image + nix develop (Runtime Flexibility)
+
+Use this if you need to switch between orchestrators or install additional tools:
 
 ```bash
-# Build the base image (one-time)
+# Build the base image (includes nix with flakes)
 nix build github:farra/agentboxes#base-image
 docker load < result
 
-# Create distrobox (one-time)
-distrobox create --image agentboxes-base:latest --name ralph-box
+# Create distrobox
+distrobox create --image agentboxes-base:latest --name dev
+distrobox enter dev
 
-# Clone the repository (distrobox shares $HOME, so clone on host or inside)
+# Clone and set up
 git clone https://github.com/steveyegge/beads.git ~/projects/beads
-
-# Enter distrobox and work
-distrobox enter ralph-box
 cd ~/projects/beads
 nix develop github:farra/agentboxes#ralph
 ralph-enable
-ralph --monitor
 ```
-
-Distrobox shares your `$HOME`, so `~/projects`, SSH keys, `.ralph/` configs, and dotfiles persist across sessions.
 
 ## Configuring for Code Review
 

@@ -27,43 +27,59 @@ openclaw onboard --install-daemon
 openclaw gateway run
 ```
 
-### Option B: Using Docker
+### Option B: Using Pre-built Image + Distrobox (Recommended for Persistent Use)
 
 ```bash
-# Build and load the base image
-nix build github:farra/agentboxes#base-image
+# Build the pre-built openclaw image (everything included)
+nix build github:farra/agentboxes#openclaw-image
+docker load < result
+
+# Create and enter distrobox
+distrobox create --image agentbox:latest --name openclaw-box
+distrobox enter openclaw-box
+
+# openclaw is pre-installed!
+openclaw onboard --install-daemon
+openclaw gateway run
+```
+
+Distrobox shares your `$HOME`, so `~/.config/openclaw`, SSH keys, and dotfiles persist across sessions.
+
+### Option C: Using Docker
+
+```bash
+# Build the pre-built openclaw image
+nix build github:farra/agentboxes#openclaw-image
 docker load < result
 
 # Run with port exposure for gateway
 docker run -it \
   -v ~/.config/openclaw:/root/.config/openclaw \
   -p 18789:18789 \
-  agentboxes-base:latest
+  agentbox:latest
 
-# Inside container
-nix develop github:farra/agentboxes#openclaw
+# openclaw is pre-installed
 openclaw onboard --install-daemon
 openclaw gateway run
 ```
 
-### Option C: Using Distrobox (Recommended for Persistent Use)
+### Option D: Using Base Image + nix develop (Runtime Flexibility)
+
+Use this if you need to switch between orchestrators or install additional tools:
 
 ```bash
-# Build the base image
+# Build the base image (includes nix with flakes)
 nix build github:farra/agentboxes#base-image
 docker load < result
 
-# Create and enter distrobox
-distrobox create --image agentboxes-base:latest --name openclaw-box
-distrobox enter openclaw-box
+# Create distrobox
+distrobox create --image agentboxes-base:latest --name dev
+distrobox enter dev
 
-# Set up openclaw
+# Install openclaw at runtime
 nix develop github:farra/agentboxes#openclaw
 openclaw onboard --install-daemon
-openclaw gateway run
 ```
-
-Distrobox shares your `$HOME`, so `~/.config/openclaw`, SSH keys, and dotfiles persist across sessions.
 
 ## Configuring for Code Discussions
 

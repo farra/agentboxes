@@ -72,8 +72,14 @@
               inherit pkgs system substrate orchestrators nurPkgs;
               llmAgentsPkgs = llmPkgs;
             };
+
+            mkProjectImage = import ./lib/mkProjectImage.nix {
+              inherit pkgs system substrate orchestrators nurPkgs;
+              llmAgentsPkgs = llmPkgs;
+            };
           in {
             devShells.default = mkProjectShell depsPath;
+            packages.image = mkProjectImage depsPath;
           }
         );
 
@@ -131,6 +137,29 @@
 
         # Import OCI image builders
         baseImage = import ./images/base.nix { inherit pkgs substrate; };
+
+        # Import NUR for image building
+        nurPkgs = import nur { inherit pkgs; nurpkgs = pkgs; };
+
+        # Orchestrator map for image building
+        orchestrators = {
+          inherit schmux gastown openclaw ralph;
+        };
+
+        # mkProjectImage for building orchestrator images
+        mkProjectImage = import ./lib/mkProjectImage.nix {
+          inherit pkgs system substrate orchestrators nurPkgs;
+          llmAgentsPkgs = llmPkgs;
+        };
+
+        # Helper to create an image config
+        makeImageConfig = name: ''
+          [orchestrator]
+          name = "${name}"
+
+          [bundles]
+          include = ["complete"]
+        '';
       in
       {
         # Packages that can be built
@@ -150,6 +179,12 @@
           # Utilities
           beads = llmPkgs.beads;
           base-image = baseImage;
+
+          # Pre-built orchestrator images
+          schmux-image = mkProjectImage (pkgs.writeText "agentbox.toml" (makeImageConfig "schmux"));
+          gastown-image = mkProjectImage (pkgs.writeText "agentbox.toml" (makeImageConfig "gastown"));
+          openclaw-image = mkProjectImage (pkgs.writeText "agentbox.toml" (makeImageConfig "openclaw"));
+          ralph-image = mkProjectImage (pkgs.writeText "agentbox.toml" (makeImageConfig "ralph"));
 
           default = schmux.package;
         };
