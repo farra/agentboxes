@@ -1,0 +1,31 @@
+# schmux-slim: Schmux orchestrator environment (EXPERIMENTAL slim bootstrap)
+#
+# WARNING: Slim images are experimental and have limitations.
+# The nix-portable approach creates symlinks that only work inside
+# nix-portable's sandbox. Use baked images (schmux.toml) for production.
+#
+# Slim images are smaller (~300MB) but require first-boot setup and
+# tools must be accessed via `nix develop` or `nix shell`.
+#
+# Build: nix build .#schmux-slim-image
+# Load: docker load < result
+# Use: distrobox create --image schmux-slim:latest --name dev
+
+[image]
+name = "schmux-slim"
+tag = "latest"
+base = "wolfi"
+variant = "slim"
+auto_bootstrap = true
+
+[orchestrator]
+name = "schmux"
+
+agents = ["claude-code"]
+
+bundles = ["baseline"]
+
+packages = [
+  "python312",
+  "nodejs_22",
+]

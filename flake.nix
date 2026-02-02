@@ -89,14 +89,14 @@
 
             # Parse config to determine image variant
             config = builtins.fromTOML (builtins.readFile depsPath);
-            variant = config.image.variant or "slim";
+            variant = config.image.variant or "baked";
 
             # Route to appropriate image builder based on variant
-            # slim (default): bootstrap image with on-demand installation
-            # baked: all tools pre-installed in image
-            mkImage = if variant == "baked"
-              then mkProjectImage
-              else mkSlimImage;
+            # baked (default): all tools pre-installed in image
+            # slim (experimental): bootstrap image with on-demand installation via nix-portable
+            mkImage = if variant == "slim"
+              then mkSlimImage
+              else mkProjectImage;
           in {
             devShells.default = mkProjectShell depsPath;
             packages = {
@@ -188,16 +188,16 @@
         };
 
         # Router: select image builder based on variant in config
-        # slim (default): bootstrap image with on-demand installation
-        # baked: all tools pre-installed in image
+        # baked (default): all tools pre-installed in image
+        # slim (experimental): bootstrap image with on-demand installation via nix-portable
         mkImage = depsPath:
           let
             config = builtins.fromTOML (builtins.readFile depsPath);
-            variant = config.image.variant or "slim";
+            variant = config.image.variant or "baked";
           in
-            if variant == "baked"
-            then mkProjectImage depsPath
-            else mkSlimImage depsPath;
+            if variant == "slim"
+            then mkSlimImage depsPath
+            else mkProjectImage depsPath;
       in
       {
         # Packages that can be built
