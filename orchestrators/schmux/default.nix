@@ -52,7 +52,12 @@ let
 
     dontUnpack = true;
 
-    nativeBuildInputs = [ pkgs.makeWrapper ];
+    # autoPatchelfHook patches the ELF interpreter and RPATH so the binary
+    # works in containers where /lib64/ld-linux-x86-64.so.2 doesn't exist
+    nativeBuildInputs = [ pkgs.makeWrapper pkgs.autoPatchelfHook ];
+
+    # Runtime libraries needed by the Go binary (glibc for dynamically-linked Go)
+    buildInputs = [ pkgs.stdenv.cc.cc.lib ];
 
     installPhase = ''
       runHook preInstall
