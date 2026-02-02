@@ -74,11 +74,16 @@ let
       runHook postInstall
     '';
 
+    # For future llm-agents.nix submission
+    passthru.category = "Workflow & Project Management";
+
     meta = with pkgs.lib; {
       description = "Multi-agent AI orchestration system using tmux";
       homepage = "https://github.com/sergeknystautas/schmux";
       license = licenses.mit;
+      sourceProvenance = with sourceTypes; [ binaryNativeCode ];
       platforms = builtins.attrNames platformInfo;
+      mainProgram = "schmux";
     };
   };
 

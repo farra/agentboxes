@@ -5,18 +5,17 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
-    # Agent flakes (community-maintained, fast-updating)
-    claude-code.url = "github:sadjow/claude-code-nix";
-    codex-cli.url = "github:sadjow/codex-cli-nix";
+    # Single source for all AI coding agents (daily updates, binary cache)
+    llm-agents.url = "github:numtide/llm-agents.nix";
 
-    # Orchestrator sources (non-flake repos, used as source only)
+    # Orchestrator sources (not yet in llm-agents.nix)
     ralph-src = {
       url = "github:frankbria/ralph-claude-code";
-      flake = false;  # Not a flake, just source files
+      flake = false;
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, claude-code, codex-cli, ralph-src }:
+  outputs = { self, nixpkgs, flake-utils, llm-agents, ralph-src }:
     let
       # System-independent outputs
       templates = {
@@ -34,28 +33,42 @@
           let
             pkgs = nixpkgs.legacyPackages.${system};
             substrate = import ./lib/substrate.nix { inherit pkgs; };
+            llmPkgs = llm-agents.packages.${system};
 
             # Import orchestrators
             orchestrators = {
               schmux = import ./orchestrators/schmux { inherit pkgs system substrate; };
-              gastown = import ./orchestrators/gastown { inherit pkgs system substrate; };
-              openclaw = import ./orchestrators/openclaw { inherit pkgs system substrate; };
-              ralph = import ./orchestrators/ralph {
+              gastown = import ./orchestrators/gastown {
                 inherit pkgs system substrate;
-                claude-code-input = claude-code;
-                ralph-src = ralph-src;
+                beads = llmPkgs.beads;
+              };
+              openclaw = import ./orchestrators/openclaw {
+                inherit pkgs system substrate;
+                openclaw-pkg = llmPkgs.openclaw;
+              };
+              ralph = import ./orchestrators/ralph {
+                inherit pkgs system substrate ralph-src;
+                claude-code = llmPkgs.claude-code;
               };
             };
 
-            # Import agents
+            # Import agents (wrapping llm-agents.nix packages)
             agents = {
               claude = import ./agents/claude {
-                inherit pkgs system substrate;
-                claude-code-input = claude-code;
+                inherit pkgs substrate;
+                claude-code = llmPkgs.claude-code;
               };
               codex = import ./agents/codex {
-                inherit pkgs system substrate;
-                codex-cli-input = codex-cli;
+                inherit pkgs substrate;
+                codex = llmPkgs.codex;
+              };
+              gemini = import ./agents/gemini {
+                inherit pkgs substrate;
+                gemini-cli = llmPkgs.gemini-cli;
+              };
+              opencode = import ./agents/opencode {
+                inherit pkgs substrate;
+                opencode = llmPkgs.opencode;
               };
             };
 
@@ -83,24 +96,40 @@
         # Import substrate (common tools layer)
         substrate = import ./lib/substrate.nix { inherit pkgs; };
 
+        # Get packages from llm-agents.nix
+        llmPkgs = llm-agents.packages.${system};
+
         # Import orchestrator packages
         schmux = import ./orchestrators/schmux { inherit pkgs system substrate; };
-        gastown = import ./orchestrators/gastown { inherit pkgs system substrate; };
-        openclaw = import ./orchestrators/openclaw { inherit pkgs system substrate; };
-        ralph = import ./orchestrators/ralph {
+        gastown = import ./orchestrators/gastown {
           inherit pkgs system substrate;
-          claude-code-input = claude-code;
-          ralph-src = ralph-src;
+          beads = llmPkgs.beads;
+        };
+        openclaw = import ./orchestrators/openclaw {
+          inherit pkgs system substrate;
+          openclaw-pkg = llmPkgs.openclaw;
+        };
+        ralph = import ./orchestrators/ralph {
+          inherit pkgs system substrate ralph-src;
+          claude-code = llmPkgs.claude-code;
         };
 
-        # Import agent packages
+        # Import agent wrappers
         claude = import ./agents/claude {
-          inherit pkgs system substrate;
-          claude-code-input = claude-code;
+          inherit pkgs substrate;
+          claude-code = llmPkgs.claude-code;
         };
         codex = import ./agents/codex {
-          inherit pkgs system substrate;
-          codex-cli-input = codex-cli;
+          inherit pkgs substrate;
+          codex = llmPkgs.codex;
+        };
+        gemini = import ./agents/gemini {
+          inherit pkgs substrate;
+          gemini-cli = llmPkgs.gemini-cli;
+        };
+        opencode = import ./agents/opencode {
+          inherit pkgs substrate;
+          opencode = llmPkgs.opencode;
         };
 
         # Import OCI image builders
@@ -109,13 +138,22 @@
       {
         # Packages that can be built
         packages = {
+          # Orchestrators
           schmux = schmux.package;
           gastown = gastown.package;
-          beads = gastown.beads;
           ralph = ralph.package;
+          # Note: openclaw package comes from llm-agents.nix
+
+          # Agents (re-exported from llm-agents.nix)
           claude = claude.package;
           codex = codex.package;
+          gemini = gemini.package;
+          opencode = opencode.package;
+
+          # Utilities
+          beads = llmPkgs.beads;
           base-image = baseImage;
+
           default = schmux.package;
         };
 
@@ -139,6 +177,8 @@
           # Agents (standalone)
           claude = claude.shell;
           codex = codex.shell;
+          gemini = gemini.shell;
+          opencode = opencode.shell;
 
           default = schmux.shell;
         };

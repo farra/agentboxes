@@ -13,3 +13,6 @@
 [submodule "vendor/ralph"]
 	path = vendor/ralph
 	url = git@github.com:frankbria/ralph-claude-code.git
+[submodule "vendor/llm-agents.nix"]
+	path = vendor/llm-agents.nix
+	url = git@github.com:numtide/llm-agents.nix.git

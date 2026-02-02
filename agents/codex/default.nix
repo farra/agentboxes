@@ -1,16 +1,12 @@
 # Codex CLI agent wrapper
 #
-# Uses the community-maintained codex-cli-nix flake for the package,
-# and wraps it in a shell with substrate tools.
+# Wraps the codex package from llm-agents.nix with substrate tools.
 
-{ pkgs, system, substrate ? [], codex-cli-input }:
+{ pkgs, substrate ? [], codex }:
 
 let
-  # Get the package from the external flake
-  package = codex-cli-input.packages.${system}.default;
+  package = codex;
 
-  # Shell for running Codex CLI
-  # Composes: substrate + codex-cli package
   shell = pkgs.mkShell {
     packages = [ package ] ++ substrate;
 

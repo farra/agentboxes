@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "backlog@dev-agent-backlog": true
+  }
+}

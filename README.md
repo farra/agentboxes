@@ -59,8 +59,10 @@ Includes: git, curl, wget, jq, yq, ripgrep, fd, fzf, tree, less, file, openssh, 
 |------|-------------|--------|---------|
 | `claude` | Claude Code CLI | Available | `nix develop .#claude` |
 | `codex` | OpenAI Codex CLI | Available | `nix develop .#codex` |
-| `gemini` | Google Gemini CLI | Planned | - |
-| `opencode` | OpenCode CLI | Planned | - |
+| `gemini` | Google Gemini CLI | Available | `nix develop .#gemini` |
+| `opencode` | OpenCode CLI | Available | `nix develop .#opencode` |
+
+All agent packages are sourced from [numtide/llm-agents.nix](https://github.com/numtide/llm-agents.nix), which provides daily updates and a binary cache.
 
 See [docs/orchestrators/](docs/orchestrators/) for detailed guides.
 
@@ -138,8 +140,12 @@ agentboxes/
 ├── agents/
 │   ├── claude/
 │   │   └── default.nix       # Claude Code wrapper
-│   └── codex/
-│       └── default.nix       # Codex CLI wrapper
+│   ├── codex/
+│   │   └── default.nix       # Codex CLI wrapper
+│   ├── gemini/
+│   │   └── default.nix       # Gemini CLI wrapper
+│   └── opencode/
+│       └── default.nix       # OpenCode wrapper
 ├── orchestrators/
 │   ├── schmux/
 │   │   └── default.nix       # schmux package definition

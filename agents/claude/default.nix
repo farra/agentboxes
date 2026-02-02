@@ -1,16 +1,12 @@
 # Claude Code agent wrapper
 #
-# Uses the community-maintained claude-code-nix flake for the package,
-# and wraps it in a shell with substrate tools.
+# Wraps the claude-code package from llm-agents.nix with substrate tools.
 
-{ pkgs, system, substrate ? [], claude-code-input }:
+{ pkgs, substrate ? [], claude-code }:
 
 let
-  # Get the package from the external flake
-  package = claude-code-input.packages.${system}.default;
+  package = claude-code;
 
-  # Shell for running Claude Code
-  # Composes: substrate + claude-code package
   shell = pkgs.mkShell {
     packages = [ package ] ++ substrate;
 
