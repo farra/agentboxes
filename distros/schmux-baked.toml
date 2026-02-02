@@ -1,0 +1,33 @@
+# schmux-baked: Schmux on wolfi-toolbox with all tools pre-installed
+#
+# This is a baked image with all tools pre-installed. Larger than slim
+# (~500MB-2GB) but ready to use immediately without first-boot setup.
+#
+# Trade-offs vs schmux (slim):
+# - Larger image size
+# - No first-boot wait
+# - Still uses wolfi-toolbox base (not fully Nix-reproducible)
+#
+# For fully reproducible Nix images, use schmux-full.toml
+#
+# Build: nix build .#schmux-baked-image
+# Load: docker load < result
+# Use: distrobox create --image schmux-baked:latest --name dev
+
+[image]
+name = "schmux-baked"
+tag = "latest"
+base = "wolfi"
+variant = "baked"
+
+[orchestrator]
+name = "schmux"
+
+agents = ["claude-code"]
+
+bundles = ["baseline"]
+
+packages = [
+  "python312",
+  "nodejs_22",
+]

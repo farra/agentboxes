@@ -1,0 +1,34 @@
+# gastown-baked: Gastown on wolfi-toolbox with all tools pre-installed
+#
+# This is a baked image with all tools pre-installed. Larger than slim
+# but ready to use immediately without first-boot setup.
+#
+# Trade-offs vs gastown (slim):
+# - Larger image size
+# - No first-boot wait
+# - Still uses wolfi-toolbox base (not fully Nix-reproducible)
+#
+# For fully reproducible Nix images, use gastown-full.toml
+#
+# Build: nix build .#gastown-baked-image
+# Load: docker load < result
+# Use: distrobox create --image gastown-baked:latest --name dev
+
+[image]
+name = "gastown-baked"
+tag = "latest"
+base = "wolfi"
+variant = "baked"
+
+[orchestrator]
+name = "gastown"
+
+agents = ["claude-code"]
+
+bundles = ["baseline"]
+
+packages = [
+  "python312",
+  "nodejs_22",
+  "go_1_24",
+]

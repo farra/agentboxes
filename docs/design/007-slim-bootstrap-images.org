@@ -1,0 +1,460 @@
+#+TITLE: 007 - Slim Bootstrap Images
+#+AUTHOR: jaaron
+#+STATUS: Draft
+#+CATEGORY: feature
+#+CREATED: [2026-02-02]
+#+LAST_MODIFIED: [2026-02-02]
+#+SETUPFILE: ../../org-setup.org
+
+* Summary
+
+Add a "slim" image variant that ships only bootstrap tooling (nix, just,
+direnv, secretspec) and uses =nix profile install= at first boot to populate
+the environment. This complements the existing "baked" images where everything
+is pre-installed.
+
+Builds on [[file:005-oci-image-building-analysis.org][005 - OCI Image Building Analysis]], specifically the "Nix-Inside"
+approach that was analyzed but not implemented.
+
+* Motivation
+
+** Current State (Baked Images)
+
+The current wolfi-hybrid images (~500MB-2GB) work well but have trade-offs:
+
+| Aspect | Baked Image |
+|--------|-------------|
+| Size | ~500MB-2GB depending on tools |
+| First boot | Instant |
+| Customization | Rebuild image |
+| Updates | Rebuild and redeploy |
+| Network | Not required |
+
+** Problem
+
+For users who want:
+- Minimal download time
+- Ability to customize without rebuilding
+- Self-updating environments
+- Same workflow in container as local dev
+
+The baked approach requires rebuilding and redeploying for any change.
+
+** Proposed: Bootstrap Images
+
+Tiny image (~200-400MB) with just the bootstrap machinery. First boot runs
+=nix profile install= to populate the environment.
+
+| Aspect | Slim/Bootstrap | Baked/Fat |
+|--------|----------------|-----------|
+| Size | ~200-400MB | ~500MB-2GB |
+| First boot | Slow (nix download) | Instant |
+| Customization | Edit toml, re-bootstrap | Rebuild image |
+| Updates | =just update= | Rebuild and redeploy |
+| Network | Required first boot | Not required |
+
+* Design
+
+** Image Structure
+
+#+begin_example
+┌─────────────────────────────────────────────────────────┐
+│  "slim" image (~200-400MB)                              │
+├─────────────────────────────────────────────────────────┤
+│  Base: wolfi-toolbox (bash, coreutils, curl, git, etc) │
+│  Added:                                                 │
+│    - nix (single-user)                                  │
+│    - just                                               │
+│    - direnv + nix-direnv                                │
+│    - secretspec                                         │
+│    - ~/.agentboxes/                                     │
+│        ├── agentbox.toml                                │
+│        ├── flake.nix                                    │
+│        └── .envrc (for direnv)                          │
+│    - justfile (symlinked to ~ or in PATH)              │
+│    - auto-bootstrap in /etc/profile.d/ (opt-out)       │
+└─────────────────────────────────────────────────────────┘
+         │
+         │  just bootstrap (or auto on first shell)
+         ▼
+┌─────────────────────────────────────────────────────────┐
+│  ~/.nix-profile (persisted in distrobox home)          │
+│    - schmux, gastown, etc.                             │
+│    - claude-code, codex, etc.                          │
+│    - python, nodejs, go, rust                          │
+│    - All bundle tools                                  │
+└─────────────────────────────────────────────────────────┘
+#+end_example
+
+** Bootstrap Package Set
+
+The slim image includes only the minimum needed to bootstrap everything else:
+
+| Package | Source | Purpose |
+|---------|--------|---------|
+| nix | Added | Core - installs everything else via profile |
+| git | Wolfi (verify) | Fetch flakes, clone repos |
+| just | Added | Command runner for bootstrap/update/shell |
+| direnv | Added | Auto-activate environments on cd |
+| nix-direnv | Added | Efficient nix integration for direnv |
+| secretspec | Added | Secrets management (github:cachix/secretspec) |
+
+This combination enables powerful patterns:
+- *nix* - Reproducible package management
+- *just* - Task automation with =justfile=
+- *direnv + nix-direnv* - Auto-loading environments, cached evaluation
+- *secretspec* - Secrets injection without leaking to shell history
+
+Everything else comes from =nix profile install= or the =packages= list in
+agentbox.toml. For example:
+
+- =openssh= - Add to packages if you need SSH
+- =gnupg= - Add for GPG signing
+- =zsh= - Add if you prefer zsh over bash
+
+** New Nix Functions
+
+*** mkProfilePackage
+
+Creates a =buildEnv= that bundles an agentbox.toml config into a single
+installable package.
+
+#+begin_src nix
+# In flake.nix outputs
+packages.env = mkProfilePackage ./agentbox.toml;
+
+# Usage
+nix profile install .#env
+#+end_src
+
+Implementation:
+
+#+begin_src nix
+# lib/mkProfilePackage.nix
+{ pkgs, ... }:
+
+depsPath:
+
+let
+  config = builtins.fromTOML (builtins.readFile depsPath);
+  # ... same resolution logic as mkProjectShell ...
+  allPackages = orchestratorPackages ++ agentPackages ++ bundlePackages ++ extraPackages;
+in
+pkgs.buildEnv {
+  name = "agentbox-env";
+  paths = allPackages;
+}
+#+end_src
+
+*** mkSlimImage
+
+Creates a bootstrap image with nix + just + direnv + the flake files.
+
+#+begin_src nix
+# lib/mkSlimImage.nix
+{ pkgs, ... }:
+
+depsPath:
+
+let
+  config = builtins.fromTOML (builtins.readFile depsPath);
+  imageName = config.image.name or "agentbox-slim";
+  autoBootstrap = config.image.auto_bootstrap or true;
+in
+pkgs.dockerTools.buildLayeredImage {
+  name = imageName;
+  fromImage = wolfiBaseImage;
+  contents = [
+    pkgs.nix
+    pkgs.just
+    pkgs.direnv
+    pkgs.nix-direnv
+    pkgs.secretspec  # or from cachix flake
+    # flake files copied to ~/.agentboxes/ via extraCommands
+  ];
+  config = {
+    Env = [
+      "NIX_PATH=nixpkgs=${pkgs.path}"
+    ];
+  };
+  extraCommands = ''
+    # Set up ~/.agentboxes in /etc/skel (copied to ~ on first login)
+    mkdir -p etc/skel/.agentboxes
+    cp ${depsPath} etc/skel/.agentboxes/agentbox.toml
+    # ... generate flake.nix, .envrc, justfile
+
+    ${if autoBootstrap then ''
+    # Auto-bootstrap hook
+    mkdir -p etc/profile.d
+    cat > etc/profile.d/agentbox-bootstrap.sh << 'BOOTSTRAP'
+    if [ ! -f "$HOME/.agentboxes-bootstrapped" ]; then
+      echo "Agentbox: Running first-boot bootstrap..."
+      just bootstrap && touch "$HOME/.agentboxes-bootstrapped"
+    fi
+    BOOTSTRAP
+    '' else ""}
+  '';
+}
+#+end_src
+
+** Justfile Commands
+
+#+begin_src just
+# justfile (baked into image, symlinked to ~/justfile)
+
+# Install all tools from agentbox.toml
+bootstrap:
+    @echo "Installing agentbox environment..."
+    cd ~/.agentboxes && nix profile install .#env
+    @echo "Done! You may need to restart your shell."
+
+# Update flake inputs and reinstall
+update:
+    cd ~/.agentboxes && nix flake update
+    nix profile upgrade '.*agentbox.*'
+
+# Enter a nix develop shell (alternative to profile)
+shell:
+    cd ~/.agentboxes && nix develop
+
+# Show what's installed
+status:
+    nix profile list | grep -E 'agentbox|schmux|claude'
+
+# Remove agentbox packages from profile
+clean:
+    nix profile remove '.*agentbox.*'
+#+end_src
+
+** Direnv Integration
+
+The =~/.agentboxes/.envrc= enables automatic environment loading:
+
+#+begin_src bash
+# ~/.agentboxes/.envrc
+use flake
+#+end_src
+
+With nix-direnv, this caches the environment and loads it instantly when you
+=cd ~/.agentboxes=. This provides an alternative to the profile approach -
+users can choose:
+
+1. =just bootstrap= - Install to =~/.nix-profile=, always available
+2. =cd ~/.agentboxes= - Direnv activates the nix develop environment
+
+For most users, option 1 (bootstrap) is simpler. Option 2 is useful for
+development/debugging the agentbox config itself.
+
+** Auto-Bootstrap (Optional)
+
+Users can opt into auto-bootstrap by adding to their shell rc:
+
+#+begin_src bash
+# ~/.bashrc or ~/.zshrc
+if [ ! -f ~/.agentboxes-bootstrapped ]; then
+    echo "First boot detected, running bootstrap..."
+    just bootstrap && touch ~/.agentboxes-bootstrapped
+fi
+#+end_src
+
+Or we can bake this into the image's =/etc/profile.d/=:
+
+#+begin_src bash
+# /etc/profile.d/agentbox-autobootstrap.sh
+if [ ! -f "$HOME/.agentboxes-bootstrapped" ] && [ -f /etc/agentbox/flake.nix ]; then
+    echo "Agentbox: First boot detected"
+    echo "Run 'just bootstrap' to install tools, or 'just shell' for nix develop"
+fi
+#+end_src
+
+** Config Format Extensions
+
+New options in =[image]= section:
+
+#+begin_src toml
+[image]
+name = "schmux-slim"
+base = "wolfi"
+tag = "latest"
+variant = "slim"          # "slim" or "baked" (default: "baked")
+auto_bootstrap = true     # Run bootstrap on first shell (default: true)
+                          # Only applies to slim variant
+#+end_src
+
+** Image Variants
+
+| Image Name | Base | Contents | Size | Use Case |
+|------------|------|----------|------|----------|
+| =schmux-slim= | wolfi | nix, just, direnv, secretspec + flake | ~300MB | Bootstrap, customizable |
+| =schmux-wolfi= | wolfi | All tools baked | ~500MB-2GB | Instant, no network |
+| =schmux-full= | pure nix | Everything | ~11GB | Hermetic, reproducible |
+
+** Distrobox Integration
+
+Distrobox mounts the user's home directory, so:
+- =~/.nix-profile= persists across container restarts
+- =~/.agentboxes/= config persists and can be customized
+- Only first boot is slow; subsequent boots are instant
+
+** Export in flake.nix
+
+#+begin_src nix
+packages = {
+  # Existing
+  schmux-wolfi-image = mkProjectImage ./distros/schmux-wolfi.toml;
+
+  # New: profile package for nix profile install
+  schmux-env = mkProfilePackage ./distros/schmux-wolfi.toml;
+
+  # New: slim bootstrap image
+  schmux-slim-image = mkSlimImage ./distros/schmux-wolfi.toml;
+};
+#+end_src
+
+* Decision
+
+Implement the slim/bootstrap approach as an additional option alongside baked
+images. Users choose based on their trade-off preferences:
+
+- *Slim*: Small download, network required, easy customization
+- *Baked*: Larger download, offline-capable, instant start
+
+* Tasks
+:PROPERTIES:
+:CATEGORY: tasks
+:END:
+
+** TODO [AB-007-01] Create lib/mkProfilePackage.nix                     :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+New function that creates a buildEnv from agentbox.toml, suitable for
+=nix profile install=. Similar structure to mkProjectShell but outputs
+a package instead of a shell.
+
+** TODO [AB-007-02] Create lib/mkSlimImage.nix                          :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+New function that builds a minimal image containing:
+- wolfi-toolbox base
+- nix (single-user)
+- just
+- direnv + nix-direnv
+- Files in /etc/skel/.agentboxes/ (copied to ~ on first login):
+  - agentbox.toml
+  - flake.nix
+  - .envrc
+- justfile symlinked to ~
+- Auto-bootstrap script in /etc/profile.d/ (if auto_bootstrap = true)
+
+** TODO [AB-007-03] Create justfile template                             :p2:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Create a justfile with bootstrap, update, shell, status, clean commands.
+Should be baked into slim images.
+
+** TODO [AB-007-04] Export *-env and *-slim-image in flake.nix          :p2:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Add new outputs for each distro config:
+- =schmux-env= - profile package
+- =schmux-slim-image= - bootstrap image
+
+** TODO [AB-007-05] Add auto-bootstrap profile.d script                  :p3:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Optional: Add =/etc/profile.d/agentbox-bootstrap.sh= that detects first boot
+and prompts/runs bootstrap.
+
+** TODO [AB-007-06] Update CLAUDE.md with slim image docs               :p3:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Document the new image variants and when to use each.
+
+** TODO [AB-007-07] Test distrobox workflow with slim image             :p2:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Verify:
+- First boot bootstrap works
+- Profile persists across restarts
+- just commands work
+- Orchestrator runs correctly after bootstrap
+- auto_bootstrap = false disables auto-bootstrap
+- direnv activates when cd'ing to ~/.agentboxes
+
+** TODO [AB-007-08] Add variant and auto_bootstrap to config parsing    :p2:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Update mkProjectImage.nix (or create router) to handle:
+- =image.variant = "slim"= → use mkSlimImage
+- =image.variant = "baked"= → use existing mkProjectImage (default)
+- =image.auto_bootstrap= → passed to mkSlimImage
+
+* Questions
+:PROPERTIES:
+:CATEGORY: questions
+:END:
+
+** DECIDED Where should .agentboxes live in the image?
+:PROPERTIES:
+:DECIDED: [2026-02-02]
+:END:
+
+=~/.agentboxes/= - keeps home directory tidy, hidden by default. Distrobox
+always enters into home, so this is accessible. Files placed in =/etc/skel/=
+during image build get copied to =~/= on first login.
+
+** DECIDED Should auto-bootstrap be opt-in or opt-out?
+:PROPERTIES:
+:DECIDED: [2026-02-02]
+:END:
+
+Opt-out. Enabled by default via =[image] auto_bootstrap = true=.
+Users who want manual control set =auto_bootstrap = false=.
+
+** DECIDED Single-user vs multi-user Nix in slim images?
+:PROPERTIES:
+:DECIDED: [2026-02-02]
+:END:
+
+Single-user Nix. Simpler, fits the single-user distrobox model. Can revisit
+if multi-user scenarios emerge.
+
+* Future Work
+
+** Secretspec Integration Patterns
+
+The bootstrap toolchain (nix + just + direnv + secretspec) enables patterns
+worth exploring:
+
+- Auto-inject secrets via direnv's =.envrc=
+- =just= tasks that require secrets (deploy, API calls)
+- Per-project secret scopes in =~/.agentboxes/=
+- Integration with orchestrator configs (schmux agent credentials)
+
+To be designed in a future doc once usage patterns emerge.
+
+* References
+
+- [[file:005-oci-image-building-analysis.org][005 - OCI Image Building Analysis]] - Analysis of image approaches
+- [[file:006-simplified-agentbox-toml.org][006 - Simplified agentbox.toml]] - Config format used by these images
+- [[https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-profile.html][Nix profile documentation]]
+- [[https://just.systems/][Just command runner]]
+- [[https://direnv.net/][direnv]] - Environment switcher
+- [[https://github.com/nix-community/nix-direnv][nix-direnv]] - Faster nix integration for direnv
+- [[https://github.com/cachix/secretspec][secretspec]] - Secrets management for Nix

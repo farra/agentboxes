@@ -1,0 +1,30 @@
+# schmux: Schmux orchestrator environment (slim bootstrap)
+#
+# This is a slim bootstrap image. On first boot, it automatically runs
+# `just bootstrap` to install the full environment via nix profile.
+#
+# Slim images are smaller (~300MB vs 2GB+) but require first-boot setup.
+# Use schmux-baked.toml for a pre-installed image.
+#
+# Build: nix build .#schmux-image
+# Load: docker load < result
+# Use: distrobox create --image schmux:latest --name dev
+
+[image]
+name = "schmux"
+tag = "latest"
+base = "wolfi"
+# variant = "slim" is the default, no need to specify
+# auto_bootstrap = true is the default
+
+[orchestrator]
+name = "schmux"
+
+agents = ["claude-code"]
+
+bundles = ["baseline"]
+
+packages = [
+  "python312",
+  "nodejs_22",
+]

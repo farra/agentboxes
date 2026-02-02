@@ -49,7 +49,10 @@ agentboxes/
 ├── lib/
 │   ├── substrate.nix            # Common tools layer (git, jq, rg, etc.)
 │   ├── bundles.nix              # Tool bundles (baseline: 28, complete: 61)
-│   └── mkProjectShell.nix       # Compose devShell from agentbox.toml
+│   ├── mkProjectShell.nix       # Compose devShell from agentbox.toml
+│   ├── mkProjectImage.nix       # Build baked OCI images
+│   ├── mkSlimImage.nix          # Build slim bootstrap images
+│   └── mkProfilePackage.nix     # Build env for nix profile install
 ├── agents/
 │   ├── claude/
 │   │   └── default.nix          # Wrapper for claude-code-nix flake
@@ -121,8 +124,10 @@ Project environments are configured via `agentbox.toml`:
 # Image configuration (for OCI image builds)
 [image]
 name = "my-project"
-base = "wolfi"    # wolfi (smaller) or nix (fully reproducible)
+base = "wolfi"        # wolfi (smaller) or nix (fully reproducible)
 tag = "latest"
+variant = "slim"      # "slim" (default) or "baked"
+auto_bootstrap = true # Run bootstrap on first shell (default: true, slim only)
 
 # Orchestrator (optional) - agentboxes-specific
 [orchestrator]
@@ -158,9 +163,46 @@ packages = [
 - `packages` list - exact nixpkgs names (no version mapping magic)
 - NUR packages via `nur:owner/package` prefix
 - Pre-built devShells (`nix develop .#schmux`, `.#claude`, etc.)
-- OCI image building support
+- OCI image building with slim/baked variants
 
 The `mkProjectShell.nix` reads this and composes a devShell with substrate + orchestrator + agents + bundles + packages.
+
+### OCI Image Variants
+
+Three image variants are available for each orchestrator:
+
+| Variant | Size | First Boot | Reproducibility | Use Case |
+|---------|------|------------|-----------------|----------|
+| **slim** (default) | ~300MB | Runs `just bootstrap` | wolfi base | Development, CI |
+| **baked** | ~500MB-2GB | Ready immediately | wolfi base | Production, slow networks |
+| **full** | ~11GB | Ready immediately | Pure Nix | Air-gapped, reproducibility |
+
+**Slim images** (default) ship bootstrap tooling (nix, just, direnv) and install the full environment on first boot via `nix profile install`. This makes images small and fast to pull, with first-boot setup taking a few minutes.
+
+**Baked images** pre-install all tools in the image. Larger to pull but ready to use immediately.
+
+**Full images** use a pure Nix base (no wolfi) for complete reproducibility. Very large but fully deterministic.
+
+```bash
+# Build slim image (default)
+nix build .#schmux-image
+
+# Build baked image
+nix build .#schmux-baked-image
+
+# Build full Nix image
+nix build .#schmux-full-image
+
+# Build profile package (for nix profile install)
+nix build .#schmux-env
+```
+
+**Slim image workflow:**
+1. `distrobox create --image schmux:latest --name dev`
+2. `distrobox enter dev`
+3. Auto-bootstrap runs on first shell (or run `just bootstrap`)
+4. Tools are installed to `~/.nix-profile`, persisted across sessions
+5. Update later with `just update`
 
 ## Build & Test Commands
 
@@ -184,9 +226,14 @@ nix develop
 nix build .#schmux
 nix build .#claude
 
-# Build base OCI image
-nix build .#base-image
+# Build OCI images (slim is default)
+nix build .#schmux-image          # Slim bootstrap image
+nix build .#schmux-baked-image    # Baked wolfi image
+nix build .#schmux-full-image     # Pure Nix image
 docker load < result
+
+# Build profile packages (for nix profile install)
+nix build .#schmux-env
 
 # Validate flake
 nix flake check

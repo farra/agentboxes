@@ -1,0 +1,28 @@
+# openclaw: OpenClaw orchestrator environment (slim bootstrap)
+#
+# This is a slim bootstrap image. On first boot, it automatically runs
+# `just bootstrap` to install the full environment via nix profile.
+#
+# Slim images are smaller (~300MB vs 2GB+) but require first-boot setup.
+# Use openclaw-baked.toml for a pre-installed image.
+#
+# Build: nix build .#openclaw-image
+# Load: docker load < result
+# Use: distrobox create --image openclaw:latest --name dev
+
+[image]
+name = "openclaw"
+tag = "latest"
+base = "wolfi"
+
+[orchestrator]
+name = "openclaw"
+
+agents = ["claude-code"]
+
+bundles = ["baseline"]
+
+packages = [
+  "nodejs_22",
+  "pnpm",
+]
