@@ -11,11 +11,14 @@
 #   - nix-direnv: Cached nix integration for direnv
 #   - cacert: SSL certificates for nix
 #
-# Generated files in /etc/skel/ (copied to ~ on user creation):
+# Generated files in /etc/skel/ (copied to ~ on first shell):
 #   - ~/.agentboxes/agentbox.toml: The config file
 #   - ~/.agentboxes/flake.nix: Generated flake referencing agentboxes
 #   - ~/.agentboxes/.envrc: "use flake"
 #   - ~/justfile: Commands for bootstrap/update/shell/status/clean
+#
+# Note: distrobox mounts the host home directory, so /etc/skel isn't copied
+# automatically. The bootstrap script handles copying these files on first run.
 #
 # Usage:
 #   mkSlimImage { inherit pkgs system; } ./agentbox.toml
@@ -115,24 +118,39 @@ let
   '';
 
   # Auto-bootstrap script (runs on first shell if enabled)
+  # Note: distrobox mounts host home, so /etc/skel is never copied automatically.
+  # This script copies the skel files on first run before bootstrapping.
   autoBootstrapScript = pkgs.writeText "agentbox-bootstrap.sh" ''
+    # Copy agentbox files from /etc/skel if they don't exist
+    # (distrobox mounts host home, so skel isn't copied automatically)
+    if [ ! -d "$HOME/.agentboxes" ] && [ -d /etc/skel/.agentboxes ]; then
+      cp -r /etc/skel/.agentboxes "$HOME/.agentboxes"
+    fi
+    if [ ! -f "$HOME/justfile" ] && [ -f /etc/skel/justfile ]; then
+      cp /etc/skel/justfile "$HOME/justfile"
+    fi
+
     # Auto-bootstrap on first login
     if [ ! -f "$HOME/.agentboxes-bootstrapped" ] && [ -f "$HOME/.agentboxes/flake.nix" ]; then
       echo ""
-      echo "┌─────────────────────────────────────────┐"
-      echo "│  Agentbox: First boot detected          │"
-      echo "│  Running bootstrap installation...      │"
-      echo "└─────────────────────────────────────────┘"
+      echo "    ___                  _   ___"
+      echo "   / _ | ___ ____ ___  _| |_/ _ )___ __ __"
+      echo "  / __ |/ _ \`/ -_) _ \\/ _  _/ _ / _ \\\\ \\ /"
+      echo " /_/ |_|\\_  /\\__/_//_/\\____|___/\\___/_\\_\\"
+      echo "        /___/"
+      echo ""
+      echo " First boot detected - installing environment..."
+      echo " This may take a few minutes on first run."
       echo ""
       if just bootstrap; then
         touch "$HOME/.agentboxes-bootstrapped"
         echo ""
-        echo "Bootstrap complete! Your environment is ready."
-        echo "Run 'just status' to see installed packages."
+        echo " Bootstrap complete! Your environment is ready."
+        echo " Run 'just status' to see installed packages."
         echo ""
       else
         echo ""
-        echo "Bootstrap failed. Run 'just bootstrap' to retry."
+        echo " Bootstrap failed. Run 'just bootstrap' to retry."
         echo ""
       fi
     fi
