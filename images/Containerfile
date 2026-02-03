@@ -1,0 +1,53 @@
+# Agentboxes baked image builder
+#
+# Builds OCI images with all tools pre-installed using Nix.
+# The agentbox.toml files drive what gets installed via the flake's -env packages.
+#
+# Build examples:
+#   podman build --build-arg ENV_NAME=schmux -t agentboxes-schmux images/
+#   podman build --build-arg ENV_NAME=gastown -t agentboxes-gastown images/
+#   podman build --build-arg ENV_NAME=ralph -t agentboxes-ralph images/
+#
+# Or use the helper script:
+#   ./scripts/build-image.sh schmux
+#
+# Run with distrobox:
+#   distrobox create --image agentboxes-schmux --name schmux
+#   distrobox enter schmux
+#
+# Available ENV_NAME values (from flake packages ending in -env):
+#   schmux, gastown, openclaw, ralph
+
+ARG BASE_IMAGE=ghcr.io/ublue-os/wolfi-toolbox:latest
+FROM ${BASE_IMAGE}
+
+ARG ENV_NAME=schmux
+ARG FLAKE_URL=github:farra/agentboxes
+
+LABEL org.opencontainers.image.source="https://github.com/farra/agentboxes"
+LABEL org.opencontainers.image.description="Agentboxes ${ENV_NAME} environment"
+
+# Install Nix using Determinate Systems installer
+# --init none: no systemd integration (not available during build)
+# --no-confirm: non-interactive
+RUN curl -L https://install.determinate.systems/nix | sh -s -- install linux \
+    --no-confirm \
+    --init none
+
+# Set up environment for nix commands
+ENV PATH="/nix/var/nix/profiles/default/bin:$PATH"
+
+# Install the requested environment from the flake
+# This bakes all tools into the image layer
+RUN nix profile install "${FLAKE_URL}#${ENV_NAME}-env" \
+    --extra-experimental-features "nix-command flakes"
+
+# Add nix profile to default PATH for all users
+# Works for both login and non-login shells
+RUN echo 'export PATH="/nix/var/nix/profiles/default/bin:$HOME/.nix-profile/bin:$PATH"' >> /etc/profile.d/nix.sh && \
+    echo 'export PATH="/nix/var/nix/profiles/default/bin:$HOME/.nix-profile/bin:$PATH"' >> /etc/bashrc
+
+# Nix remains available as a tool for users who want it
+# But all agentbox tools are already installed - no bootstrap needed
+
+CMD ["/bin/bash"]
