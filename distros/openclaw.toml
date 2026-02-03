@@ -1,13 +1,8 @@
 # openclaw: OpenClaw orchestrator environment
 #
-# Baked image with all tools pre-installed on wolfi-toolbox base.
-# Ready to use immediately after distrobox create.
-#
-# Build: nix build .#openclaw-image
-# Load: docker load < result
-# Use: distrobox create --image openclaw:latest --name dev
+# Build image: just build-image openclaw
+# Use with distrobox: distrobox create --image ghcr.io/farra/agentboxes-openclaw:latest --name dev
 
-# Root-level configuration (must come before section headers)
 agents = ["claude-code"]
 bundles = ["baseline"]
 packages = ["nodejs_22", "pnpm"]

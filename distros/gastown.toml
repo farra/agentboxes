@@ -1,13 +1,8 @@
 # gastown: Gastown orchestrator environment
 #
-# Baked image with all tools pre-installed on wolfi-toolbox base.
-# Ready to use immediately after distrobox create.
-#
-# Build: nix build .#gastown-image
-# Load: docker load < result
-# Use: distrobox create --image gastown:latest --name dev
+# Build image: just build-image gastown
+# Use with distrobox: distrobox create --image ghcr.io/farra/agentboxes-gastown:latest --name dev
 
-# Root-level configuration (must come before section headers)
 agents = ["claude-code"]
 bundles = ["baseline"]
 packages = ["python312", "nodejs_22", "go_1_24"]

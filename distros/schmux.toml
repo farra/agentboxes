@@ -1,22 +1,8 @@
 # schmux: Schmux orchestrator environment
 #
-# Baked image with all tools pre-installed on wolfi-toolbox base.
-# Ready to use immediately after distrobox create.
-#
-# Build: nix build .#schmux-image
-# Load: docker load < result
-# Use: distrobox create --image schmux:latest --name dev
+# Build image: just build-image schmux
+# Use with distrobox: distrobox create --image ghcr.io/farra/agentboxes-schmux:latest --name dev
 
-# schmux: Schmux orchestrator environment
-#
-# Baked image with all tools pre-installed on wolfi-toolbox base.
-# Ready to use immediately after distrobox create.
-#
-# Build: nix build .#schmux-image
-# Load: docker load < result
-# Use: distrobox create --image schmux:latest --name dev
-
-# Root-level configuration (must come before section headers)
 agents = ["claude-code"]
 bundles = ["baseline"]
 packages = ["python312", "nodejs_22"]

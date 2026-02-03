@@ -6,7 +6,7 @@
 
 1. `nix develop github:farra/agentboxes#<name>` - Enter a ready-to-use environment
 2. `nix flake init -t github:farra/agentboxes#<name>` - Scaffold a new project
-3. `nix build .#<name>-image` - Build OCI container images for deployment
+3. `just build-image <name>` - Build OCI container images for deployment
 4. Use `distrobox.ini` for team onboarding
 
 ## Background Context
@@ -34,10 +34,10 @@ The user already has [cautomaton-develops](https://github.com/farra/cautomaton-d
 
 | Name | Language | Key Deps | Status |
 |------|----------|----------|--------|
-| claude | Node.js | Claude Code CLI (via claude-code-nix) | Available |
-| codex | Rust | Codex CLI (via codex-cli-nix) | Available |
-| gemini | Go | Google Gemini CLI | Planned |
-| opencode | Go | OpenCode CLI | Planned |
+| claude | Node.js | Claude Code CLI (via llm-agents.nix) | Available |
+| codex | Rust | Codex CLI (via llm-agents.nix) | Available |
+| gemini | Go | Google Gemini CLI | Available |
+| opencode | Go | OpenCode CLI | Available |
 
 ## Architecture
 
@@ -46,74 +46,71 @@ The user already has [cautomaton-develops](https://github.com/farra/cautomaton-d
 ```
 agentboxes/
 ├── flake.nix                    # Root flake with all outputs
+├── justfile                     # Build commands for images, testing, dev
 ├── lib/
 │   ├── substrate.nix            # Common tools layer (git, jq, rg, etc.)
 │   ├── bundles.nix              # Tool bundles (baseline: 28, complete: 61)
+│   ├── parseAgentboxConfig.nix  # Shared TOML parsing logic
 │   ├── mkProjectShell.nix       # Compose devShell from agentbox.toml
-│   ├── mkProjectImage.nix       # Build baked OCI images
-│   ├── mkSlimImage.nix          # Build slim bootstrap images
 │   └── mkProfilePackage.nix     # Build env for nix profile install
 ├── agents/
 │   ├── claude/
-│   │   └── default.nix          # Wrapper for claude-code-nix flake
-│   └── codex/
-│       └── default.nix          # Wrapper for codex-cli-nix flake
+│   │   └── default.nix          # Wrapper for claude-code
+│   ├── codex/
+│   │   └── default.nix          # Wrapper for codex
+│   ├── gemini/
+│   │   └── default.nix          # Wrapper for gemini-cli
+│   └── opencode/
+│       └── default.nix          # Wrapper for opencode
 ├── orchestrators/
 │   ├── schmux/
 │   │   └── default.nix          # Schmux package + shell
 │   ├── gastown/
 │   │   └── default.nix          # Gastown package + shell
-│   └── openclaw/
-│       └── default.nix          # OpenClaw environment
+│   ├── openclaw/
+│   │   └── default.nix          # OpenClaw environment
+│   └── ralph/
+│       └── default.nix          # Ralph environment
 ├── templates/
 │   └── project/
 │       ├── flake.nix            # Template that reads agentbox.toml
 │       └── agentbox.toml        # Example configuration
 ├── images/
-│   └── base.nix                 # Base OCI image definition
+│   └── Containerfile            # OCI image builder
+├── distros/
+│   └── *.toml                   # Pre-configured orchestrator configs
 └── docs/
     └── orchestrators/           # Usage guides
 ```
 
-### Root flake.nix Structure
+### Data Flow
 
-```nix
-{
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
-    # Agent flakes (community-maintained, fast-updating)
-    claude-code.url = "github:sadjow/claude-code-nix";
-    codex-cli.url = "github:sadjow/codex-cli-nix";
-  };
-
-  outputs = { self, nixpkgs, flake-utils, claude-code, codex-cli }: {
-    # Templates for `nix flake init -t`
-    templates.project = { path = ./templates/project; description = "..."; };
-
-    # Library functions for downstream projects
-    lib.mkProjectOutputs = configPath: /* reads agentbox.toml, returns devShells */;
-
-    # DevShells for `nix develop`
-    devShells = forAllSystems (system: {
-      substrate = /* common tools only */;
-      schmux = /* orchestrator + substrate */;
-      gastown = /* orchestrator + substrate */;
-      openclaw = /* orchestrator + substrate */;
-      claude = /* agent + substrate */;
-      codex = /* agent + substrate */;
-    });
-
-    # Packages for `nix build`
-    packages = forAllSystems (system: {
-      schmux = /* schmux binary */;
-      gastown = /* gastown binary */;
-      claude = /* claude-code package */;
-      codex = /* codex-cli package */;
-      base-image = /* OCI image with substrate */;
-    });
-  };
-}
+```
+                    agentbox.toml
+                         │
+                         ▼
+               ┌─────────────────────┐
+               │ parseAgentboxConfig │  (shared Nix logic)
+               └─────────────────────┘
+                         │
+          ┌──────────────┴──────────────┐
+          ▼                             ▼
+┌──────────────────┐          ┌──────────────────┐
+│  mkProjectShell  │          │ mkProfilePackage │
+│  → devShell      │          │  → *-env package │
+└──────────────────┘          └──────────────────┘
+                                        │
+                                        ▼
+                              ┌──────────────────┐
+                              │   Containerfile  │
+                              │  nix profile     │
+                              │  install .#*-env │
+                              └──────────────────┘
+                                        │
+                                        ▼
+                              ┌──────────────────┐
+                              │   OCI Image      │
+                              └──────────────────┘
 ```
 
 ### agentbox.toml Format
@@ -121,13 +118,11 @@ agentboxes/
 Project environments are configured via `agentbox.toml`:
 
 ```toml
-# Image configuration (for OCI image builds)
+# Image configuration
 [image]
 name = "my-project"
-base = "wolfi"        # wolfi (smaller) or nix (fully reproducible)
 tag = "latest"
-variant = "slim"      # "slim" (default) or "baked"
-auto_bootstrap = true # Run bootstrap on first shell (default: true, slim only)
+base = "wolfi"
 
 # Orchestrator (optional) - agentboxes-specific
 [orchestrator]
@@ -163,46 +158,31 @@ packages = [
 - `packages` list - exact nixpkgs names (no version mapping magic)
 - NUR packages via `nur:owner/package` prefix
 - Pre-built devShells (`nix develop .#schmux`, `.#claude`, etc.)
-- OCI image building with slim/baked variants
 
 The `mkProjectShell.nix` reads this and composes a devShell with substrate + orchestrator + agents + bundles + packages.
 
-### OCI Image Variants
+### OCI Image Building
 
-Three image variants are available for each orchestrator:
-
-| Variant | Size | First Boot | Reproducibility | Use Case |
-|---------|------|------------|-----------------|----------|
-| **slim** (default) | ~300MB | Runs `just bootstrap` | wolfi base | Development, CI |
-| **baked** | ~500MB-2GB | Ready immediately | wolfi base | Production, slow networks |
-| **full** | ~11GB | Ready immediately | Pure Nix | Air-gapped, reproducibility |
-
-**Slim images** (default) ship bootstrap tooling (nix, just, direnv) and install the full environment on first boot via `nix profile install`. This makes images small and fast to pull, with first-boot setup taking a few minutes.
-
-**Baked images** pre-install all tools in the image. Larger to pull but ready to use immediately.
-
-**Full images** use a pure Nix base (no wolfi) for complete reproducibility. Very large but fully deterministic.
+Images are built using a Containerfile that installs the `-env` profile package:
 
 ```bash
-# Build slim image (default)
-nix build .#schmux-image
+# Build an image
+just build-image schmux
 
-# Build baked image
-nix build .#schmux-baked-image
-
-# Build full Nix image
-nix build .#schmux-full-image
-
-# Build profile package (for nix profile install)
-nix build .#schmux-env
+# Or manually:
+podman build --build-arg ENV_NAME=schmux -t agentboxes-schmux images/
 ```
 
-**Slim image workflow:**
-1. `distrobox create --image schmux:latest --name dev`
-2. `distrobox enter dev`
-3. Auto-bootstrap runs on first shell (or run `just bootstrap`)
-4. Tools are installed to `~/.nix-profile`, persisted across sessions
-5. Update later with `just update`
+The Containerfile:
+1. Starts from `wolfi-toolbox` base (distrobox-compatible)
+2. Installs Nix using Determinate Systems installer
+3. Runs `nix profile install .#<name>-env` to bake all tools
+
+Images are ready to use immediately with distrobox:
+```bash
+distrobox create --image ghcr.io/farra/agentboxes-schmux:latest --name dev
+distrobox enter dev
+```
 
 ## Build & Test Commands
 
@@ -211,14 +191,17 @@ nix build .#schmux-env
 nix develop .#schmux
 nix develop .#gastown
 nix develop .#openclaw
+nix develop .#ralph
 
 # Enter agent shells
 nix develop .#claude
 nix develop .#codex
+nix develop .#gemini
+nix develop .#opencode
 
 # Create a new project from template
 mkdir my-project && cd my-project
-nix flake init -t .#project
+nix flake init -t github:farra/agentboxes#project
 # Edit agentbox.toml, then:
 nix develop
 
@@ -226,24 +209,29 @@ nix develop
 nix build .#schmux
 nix build .#claude
 
-# Build OCI images (slim is default)
-nix build .#schmux-image          # Slim bootstrap image
-nix build .#schmux-baked-image    # Baked wolfi image
-nix build .#schmux-full-image     # Pure Nix image
-docker load < result
-
 # Build profile packages (for nix profile install)
 nix build .#schmux-env
 
+# Build OCI images (via justfile)
+just build-image schmux
+just build-image gastown
+
+# Test locally with distrobox
+just test-local schmux
+
+# Release to registry
+just release schmux v1.0.0
+
 # Validate flake
-nix flake check
+just check
+# or: nix flake check
 ```
 
 ## Key Design Decisions
 
 1. **Each orchestrator/agent has a standalone flake.nix** - Can be used independently or via the root flake
 2. **agentbox.toml is the user-facing config** - Simple TOML configuration for environments
-3. **OCI images built from same Nix definitions** - Single source of truth
+3. **Containerfile-based image building** - Uses `nix profile install` for baked images
 4. **distrobox.ini for non-Nix users** - Lower barrier to entry
 5. **External dependencies via flake inputs** - Community best practice; all orchestrators/agents fetch from upstream (GitHub releases, npm, or flake inputs)
 6. **vendor/ is for REFERENCE ONLY** - The `vendor/` submodules exist for local development reference and reading upstream code. Nix definitions NEVER use vendor/ directly; they always fetch from upstream sources
@@ -252,10 +240,10 @@ nix flake check
 
 1. **Phase 1**: Set up root flake.nix with template/devShell structure - DONE
 2. **Phase 2**: Create substrate layer and mkProjectShell - DONE
-3. **Phase 3**: Add schmux, gastown, openclaw orchestrators - DONE
-4. **Phase 4**: Add claude and codex agents via external flakes - DONE
+3. **Phase 3**: Add schmux, gastown, openclaw, ralph orchestrators - DONE
+4. **Phase 4**: Add claude, codex, gemini, opencode agents via llm-agents.nix - DONE
 5. **Phase 5**: Create project template with agentbox.toml composition - DONE
-6. **Phase 6**: Add OCI image building from agentbox.toml - IN PROGRESS
+6. **Phase 6**: Add Containerfile-based OCI image building - DONE
 7. **Phase 7**: CI/CD for auto-publishing images - PLANNED
 
 ## Reference: cautomaton-develops flake.nix

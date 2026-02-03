@@ -1,16 +1,11 @@
 # ralph: Ralph autonomous runner environment
 #
-# Baked image with all tools pre-installed on wolfi-toolbox base.
-# Ready to use immediately after distrobox create.
+# Build image: just build-image ralph
+# Use with distrobox: distrobox create --image ghcr.io/farra/agentboxes-ralph:latest --name dev
 #
 # Ralph is an autonomous Claude Code runner, so it only includes
 # claude-code as its agent.
-#
-# Build: nix build .#ralph-image
-# Load: docker load < result
-# Use: distrobox create --image ralph:latest --name dev
 
-# Root-level configuration (must come before section headers)
 agents = ["claude-code"]
 bundles = ["baseline"]
 packages = ["python312", "nodejs_22"]

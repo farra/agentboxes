@@ -17,7 +17,7 @@ This is similar to what you could do with [devenv](https://devenv.sh), [devbox](
 nix develop github:farra/agentboxes#schmux
 
 # Or build an OCI image
-nix build github:farra/agentboxes#schmux-image
+just build-image schmux
 ```
 
 ## How to run these environments
@@ -27,14 +27,14 @@ agentboxes builds environments. How you run them depends on your needs:
 | Method | Use when |
 |--------|----------|
 | `nix develop` | Exploring, testing, ephemeral use |
-| Docker | Isolation from host, CI/CD, deployment |
+| Docker/Podman | Isolation from host, CI/CD, deployment |
 | Distrobox | Want container isolation but with host $HOME access |
 | Direct `nix shell` | Just need the tools in your current shell |
 
 Each has tradeoffs:
 
 - **nix develop**: Ephemeral. Environment disappears when you exit. No isolation from host filesystem.
-- **Docker**: Isolated. Requires explicit volume mounts to persist state. Works everywhere Docker runs.
+- **Docker/Podman**: Isolated. Requires explicit volume mounts to persist state. Works everywhere containers run.
 - **Distrobox**: Shares `$HOME` with host by default (convenient but less isolated). Persists between sessions. Linux only.
 
 Choose based on your isolation and persistence requirements.
@@ -83,15 +83,13 @@ This creates `flake.nix` and `agentbox.toml`. Edit the config:
 [orchestrator]
 name = "schmux"
 
-[bundles]
-include = ["complete"]
+agents = ["claude-code"]
+bundles = ["baseline"]
+packages = ["python312", "nodejs_22"]
 
-[tools]
-python = "3.12"
-nodejs = "20"
-
-[llm-agents]
-include = ["claude-code"]
+[image]
+name = "my-project"
+tag = "latest"
 ```
 
 Then:
@@ -101,130 +99,102 @@ Then:
 nix develop
 
 # Or build a pre-baked image for deployment
-nix build .#image
-docker load < result
-distrobox create --image agentbox:latest --name dev
+just build-image my-project
 ```
 
 ## Distros
 
-The `distros/` directory contains full-featured configurations for each orchestrator. These include all common runtimes (Python, Node.js, Go, Rust) and applicable AI agents.
+The `distros/` directory contains configurations for each orchestrator with baseline tools and claude-code agent.
 
-| Distro | Orchestrator | Agents |
-|--------|--------------|--------|
-| `schmux-full` | schmux | claude, gemini, codex, opencode |
-| `gastown-full` | gastown | claude, gemini, codex, opencode |
-| `openclaw-full` | openclaw | claude, gemini, codex, opencode |
-| `ralph-full` | ralph | claude-code only |
+| Distro | Orchestrator | Agents | Packages |
+|--------|--------------|--------|----------|
+| `schmux` | schmux | claude-code | python, nodejs |
+| `gastown` | gastown | claude-code | python, nodejs, go |
+| `openclaw` | openclaw | claude-code | nodejs, pnpm |
+| `ralph` | ralph | claude-code | python, nodejs |
 
 Use a distro as your starting point:
 
 ```bash
 # Copy a distro config to your project
-curl -O https://raw.githubusercontent.com/farra/agentboxes/main/distros/schmux-full.toml
-mv schmux-full.toml agentbox.toml
+curl -O https://raw.githubusercontent.com/farra/agentboxes/main/distros/schmux.toml
+mv schmux.toml agentbox.toml
 ```
-
-Or build the pre-built image directly (see below).
 
 ## OCI Images
 
-### Pre-built Orchestrator Images
-
-Each orchestrator has a pre-built image based on its `distros/*-full.toml` config:
+Images are built using a Containerfile that bakes all tools into a wolfi-toolbox base:
 
 ```bash
-nix build github:farra/agentboxes#schmux-image
-nix build github:farra/agentboxes#gastown-image
-nix build github:farra/agentboxes#openclaw-image
-nix build github:farra/agentboxes#ralph-image
+# Build an image (uses podman or docker)
+just build-image schmux
+
+# Create and enter a distrobox
+just distrobox-create schmux
+just distrobox-enter schmux
+
+# Or test locally in one step
+just test-local schmux
 ```
 
-These images include all runtimes (Python, Node.js, Go, Rust), the complete tool bundle, and all applicable agents.
-
-### Project-specific Images
-
-Build an image from your `agentbox.toml`:
+### Registry Operations
 
 ```bash
-nix build .#image
-docker load < result
+# Push to registry
+just push-image schmux
+
+# Build, tag, and push a release
+just release schmux v1.0.0
 ```
 
-The image contains your orchestrator, agents, tools, and bundles - no `nix develop` needed at runtime.
+### How it works
 
-### Base Image
+The Containerfile:
+1. Starts from `wolfi-toolbox` base (distrobox-compatible)
+2. Installs Nix using Determinate Systems installer
+3. Runs `nix profile install .#<name>-env` to bake all tools
 
-For runtime flexibility, use the base image which includes nix with flakes:
-
-```bash
-nix build github:farra/agentboxes#base-image
-```
+Images are ready to use immediately - no bootstrap or first-run installation needed.
 
 ## agentbox.toml Reference
 
-### [orchestrator]
-
 ```toml
+# Image metadata
+[image]
+name = "my-project"
+tag = "latest"
+base = "wolfi"
+
+# Orchestrator (optional)
 [orchestrator]
 name = "schmux"  # schmux | gastown | openclaw | ralph
-```
 
-### [bundles]
+# AI coding agents from numtide/llm-agents.nix
+agents = ["claude-code", "codex", "gemini-cli", "opencode"]
 
-| Bundle | Tools | Description |
-|--------|-------|-------------|
-| `baseline` | 28 | Modern CLI essentials (ripgrep, fd, bat, eza, jq, fzf, etc.) |
-| `complete` | 61 | Everything in baseline plus git extras, networking, archives |
+# Tool bundles
+bundles = ["baseline"]  # baseline (28 tools) or complete (61 tools)
 
-### [tools]
+# Rust toolchains (via rust-overlay)
+# bundles = ["baseline", "rust-stable"]  # rust-stable | rust-beta | rust-nightly
 
-```toml
-[tools]
-python = "3.12"    # 3.10, 3.11, 3.12, 3.13
-nodejs = "20"      # 18, 20, 22
-go = "1.23"        # 1.21, 1.22, 1.23, 1.24
-rust = "stable"    # stable, beta, nightly, or "1.75.0"
-```
+# Exact nixpkgs package names
+packages = ["python312", "nodejs_22", "go_1_24"]
 
-### [rust]
-
-```toml
-[rust]
-components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]
-```
-
-### [llm-agents]
-
-AI coding agents from [numtide/llm-agents.nix](https://github.com/numtide/llm-agents.nix):
-
-```toml
-[llm-agents]
-include = ["claude-code", "codex"]
-```
-
-Available: `claude-code`, `codex`, `gemini-cli`, `opencode`, `amp`, `goose-cli`, `aider`, and more.
-
-### [nur]
-
-Community packages from [NUR](https://github.com/nix-community/NUR):
-
-```toml
-[nur]
-include = ["owner/package-name"]
+# NUR packages (optional)
+# packages = ["nur:owner/package"]
 ```
 
 ## Deploying to servers
 
-For remote deployment, build an OCI image and transfer it:
+Build and transfer an OCI image:
 
 ```bash
-nix build .#schmux-image
-docker load < result
-docker save agentbox:latest | ssh server 'docker load'
+just build-image schmux
+podman save ghcr.io/farra/agentboxes-schmux:latest | ssh server 'podman load'
 ```
 
-Then run via Docker, distrobox, or any container runtime.
+Then run via Docker, Podman, distrobox, or any container runtime.
 
 See the **[Deployment Guide](docs/deployment.md)** for registry publishing, team onboarding, and CI/CD examples.
 
@@ -232,17 +202,21 @@ See the **[Deployment Guide](docs/deployment.md)** for registry publishing, team
 
 ```
 agentboxes/
-├── flake.nix                 # Root flake with packages and devShells
+├── flake.nix                    # Root flake with packages and devShells
+├── justfile                     # Build commands (images, testing, dev)
 ├── lib/
-│   ├── substrate.nix         # Common tools layer
-│   ├── bundles.nix           # Tool bundles (baseline, complete)
-│   ├── mkProjectShell.nix    # Compose devShell from agentbox.toml
-│   └── mkProjectImage.nix    # Build OCI image from agentbox.toml
-├── agents/                   # Agent wrappers (claude, codex, gemini, opencode)
-├── orchestrators/            # Orchestrator definitions (schmux, gastown, etc.)
-├── templates/project/        # Template for `nix flake init -t`
-├── images/                   # OCI image definitions
-└── docs/                     # Documentation
+│   ├── substrate.nix            # Common tools layer
+│   ├── bundles.nix              # Tool bundles (baseline, complete)
+│   ├── parseAgentboxConfig.nix  # Shared TOML parsing logic
+│   ├── mkProjectShell.nix       # Compose devShell from agentbox.toml
+│   └── mkProfilePackage.nix     # Build env for nix profile install
+├── agents/                      # Agent wrappers (claude, codex, gemini, opencode)
+├── orchestrators/               # Orchestrator definitions (schmux, gastown, etc.)
+├── templates/project/           # Template for `nix flake init -t`
+├── images/
+│   └── Containerfile            # OCI image builder
+├── distros/                     # Pre-configured orchestrator configs
+└── docs/                        # Documentation
 ```
 
 ## Related Projects

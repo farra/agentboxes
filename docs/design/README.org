@@ -27,6 +27,9 @@ Each document captures a decision, its rationale, and implementation tasks.
 | 002 | [[file:002-composable-agent-environments.org][Composable Agent Environments]]  | Active |
 | 003 | [[file:003-ralph-wiggum-orchestrator.org][Ralph Wiggum Orchestrator]]      | Draft  |
 | 004 | [[file:004-agentboxes-cautomaton-relationship.org][Agentboxes/Cautomaton Relationship]] | Draft  |
+| 005 | [[file:005-oci-image-building-analysis.org][OCI Image Building Analysis]]    | Living |
+| 006 | [[file:006-simplified-agentbox-toml.org][Simplified agentbox.toml]]       | Draft  |
+| 007 | [[file:007-slim-bootstrap-images.org][Slim Bootstrap Images]]          | Draft  |
 
 * Elisp Setup
 :PROPERTIES:

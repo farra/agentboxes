@@ -73,35 +73,14 @@
               llmAgentsPkgs = llmPkgs;
             };
 
-            mkProjectImage = import ./lib/mkProjectImage.nix {
-              inherit pkgs system substrate orchestrators nurPkgs;
-              llmAgentsPkgs = llmPkgs;
-            };
-
-            mkSlimImage = import ./lib/mkSlimImage.nix {
-              inherit pkgs system;
-            };
-
             mkProfilePackage = import ./lib/mkProfilePackage.nix {
               inherit pkgs system substrate orchestrators nurPkgs;
               llmAgentsPkgs = llmPkgs;
             };
-
-            # Parse config to determine image variant
-            config = builtins.fromTOML (builtins.readFile depsPath);
-            variant = config.image.variant or "baked";
-
-            # Route to appropriate image builder based on variant
-            # baked (default): all tools pre-installed in image
-            # slim (experimental): bootstrap image with on-demand installation via nix-portable
-            mkImage = if variant == "slim"
-              then mkSlimImage
-              else mkProjectImage;
           in {
             devShells.default = mkProjectShell depsPath;
             packages = {
               default = mkProjectShell depsPath;
-              image = mkImage depsPath;
               env = mkProfilePackage depsPath;
             };
           }
@@ -159,26 +138,12 @@
           opencode = llmPkgs.opencode;
         };
 
-        # Import OCI image builders
-        baseImage = import ./images/base.nix { inherit pkgs substrate; };
-
-        # Import NUR for image building
+        # Import NUR for profile packages
         nurPkgs = import nur { inherit pkgs; nurpkgs = pkgs; };
 
-        # Orchestrator map for image building
+        # Orchestrator map for profile packages
         orchestrators = {
           inherit schmux gastown openclaw ralph;
-        };
-
-        # mkProjectImage for building baked orchestrator images
-        mkProjectImage = import ./lib/mkProjectImage.nix {
-          inherit pkgs system substrate orchestrators nurPkgs;
-          llmAgentsPkgs = llmPkgs;
-        };
-
-        # mkSlimImage for building slim bootstrap images
-        mkSlimImage = import ./lib/mkSlimImage.nix {
-          inherit pkgs system;
         };
 
         # mkProfilePackage for buildEnv packages (for nix profile install)
@@ -186,18 +151,6 @@
           inherit pkgs system substrate orchestrators nurPkgs;
           llmAgentsPkgs = llmPkgs;
         };
-
-        # Router: select image builder based on variant in config
-        # baked (default): all tools pre-installed in image
-        # slim (experimental): bootstrap image with on-demand installation via nix-portable
-        mkImage = depsPath:
-          let
-            config = builtins.fromTOML (builtins.readFile depsPath);
-            variant = config.image.variant or "baked";
-          in
-            if variant == "slim"
-            then mkSlimImage depsPath
-            else mkProjectImage depsPath;
       in
       {
         # Packages that can be built
@@ -216,28 +169,9 @@
 
           # Utilities
           beads = llmPkgs.beads;
-          base-image = baseImage;
-
-          # Pre-built orchestrator images (from distros/)
-          # Slim images (default): bootstrap-only, tools installed on first boot
-          schmux-image = mkImage ./distros/schmux.toml;
-          gastown-image = mkImage ./distros/gastown.toml;
-          openclaw-image = mkImage ./distros/openclaw.toml;
-          ralph-image = mkImage ./distros/ralph.toml;
-
-          # Baked images: all tools pre-installed (larger but faster startup)
-          schmux-baked-image = mkProjectImage ./distros/schmux-baked.toml;
-          gastown-baked-image = mkProjectImage ./distros/gastown-baked.toml;
-          openclaw-baked-image = mkProjectImage ./distros/openclaw-baked.toml;
-          ralph-baked-image = mkProjectImage ./distros/ralph-baked.toml;
-
-          # Full images (pure Nix base, ~11GB, fully reproducible)
-          schmux-full-image = mkProjectImage ./distros/schmux-full.toml;
-          gastown-full-image = mkProjectImage ./distros/gastown-full.toml;
-          openclaw-full-image = mkProjectImage ./distros/openclaw-full.toml;
-          ralph-full-image = mkProjectImage ./distros/ralph-full.toml;
 
           # Profile packages (for nix profile install .#<name>-env)
+          # Used by Containerfile-based image building
           schmux-env = mkProfilePackage ./distros/schmux.toml;
           gastown-env = mkProfilePackage ./distros/gastown.toml;
           openclaw-env = mkProfilePackage ./distros/openclaw.toml;
