@@ -30,9 +30,11 @@ LABEL org.opencontainers.image.description="Agentboxes ${ENV_NAME} environment"
 # Install Nix using Determinate Systems installer
 # --init none: no systemd integration (not available during build)
 # --no-confirm: non-interactive
+# --extra-conf "sandbox = false": disable sandbox (can't set hostname in container builds)
 RUN curl -L https://install.determinate.systems/nix | sh -s -- install linux \
     --no-confirm \
-    --init none
+    --init none \
+    --extra-conf "sandbox = false"
 
 # Set up environment for nix commands
 ENV PATH="/nix/var/nix/profiles/default/bin:$PATH"
