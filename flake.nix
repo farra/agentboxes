@@ -18,13 +18,17 @@
     nur.inputs.nixpkgs.follows = "nixpkgs";
 
     # Orchestrator sources (not yet in llm-agents.nix)
+    schmux-src = {
+      url = "github:sergeknystautas/schmux";
+      flake = false;
+    };
     ralph-src = {
       url = "github:frankbria/ralph-claude-code";
       flake = false;
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, llm-agents, rust-overlay, nur, ralph-src }:
+  outputs = { self, nixpkgs, flake-utils, llm-agents, rust-overlay, nur, schmux-src, ralph-src }:
     let
       # System-independent outputs
       templates = {
@@ -53,7 +57,7 @@
 
             # Import orchestrators
             orchestrators = {
-              schmux = import ./orchestrators/schmux { inherit pkgs system substrate; };
+              schmux = import ./orchestrators/schmux { inherit pkgs system substrate schmux-src; };
               gastown = import ./orchestrators/gastown {
                 inherit pkgs system substrate;
                 beads = llmPkgs.beads;
@@ -106,7 +110,7 @@
         llmPkgs = llm-agents.packages.${system};
 
         # Import orchestrator packages
-        schmux = import ./orchestrators/schmux { inherit pkgs system substrate; };
+        schmux = import ./orchestrators/schmux { inherit pkgs system substrate schmux-src; };
         gastown = import ./orchestrators/gastown {
           inherit pkgs system substrate;
           beads = llmPkgs.beads;
