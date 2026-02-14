@@ -1,0 +1,333 @@
+#+TITLE: 005 - OCI Image Building for Distrobox: Analysis & Learnings
+#+AUTHOR: jaaron
+#+STATUS: Living
+#+CATEGORY: research
+#+CREATED: [2026-02-02]
+#+LAST_MODIFIED: [2026-02-02]
+#+SETUPFILE: ../../org-setup.org
+
+* Summary
+
+Analysis of approaches for building OCI images that work with distrobox,
+capturing learnings from implementing agentboxes. This is a reference document
+for future decisions, not a task-driven design doc.
+
+The core insight: *Nix and traditional Linux distributions have fundamentally
+different filesystem expectations*, and layering them requires careful isolation
+to avoid conflicts.
+
+* Context
+
+** What We Built
+
+Agentboxes provides reproducible developer environments for AI agents and
+orchestrators. The system supports:
+
+1. =nix develop= with =agentbox.toml= + =flake.nix= for local dev
+2. OCI images built from the same config for deployment
+3. Distrobox for running containers on immutable hosts (FCOS, Silverblue)
+
+** Use Cases Driving Requirements
+
+| Use Case | Requirement |
+|----------|-------------|
+| Local dev isolation | Don't pollute workstation with agent tools |
+| Team distribution | Reliable, reproducible environments |
+| Remote EC2 deployment | Multi-user orchestrators with dashboard handoff |
+| Security (FCOS) | Immutable host limits agent damage |
+| Simplicity | VMs, not K8s - distrobox handles container lifecycle |
+
+* Approaches Analyzed
+
+** 1. Pure Nix Images
+
+#+begin_quote
+Everything from Nix: base system, tools, all dependencies
+#+end_quote
+
+*** How It Works
+
+#+begin_src nix
+pkgs.dockerTools.buildLayeredImage {
+  name = "agentbox";
+  contents = allPackages;  # Nix handles everything
+  # ... extensive /etc scaffolding for distrobox compat
+}
+#+end_src
+
+*** Characteristics
+
+| Aspect | Assessment |
+|--------|------------|
+| Size | *11GB+* - Nix closures are large |
+| Reproducibility | Excellent - fully hermetic |
+| Distrobox compat | Fragile - requires faking os-release, stub package managers |
+| Complexity | High - must scaffold /etc/passwd, /etc/shadow, etc. |
+
+*** Key Learnings
+
+- Distrobox expects a "real" Linux distro with package manager
+- We tricked it by setting =ID=debian= and providing stub =apt-get=
+- Works but feels like fighting the tool
+
+*** Verdict
+
+Overkill for dev environments. The reproducibility benefits don't justify the
+size and complexity for this use case.
+
+** 2. Wolfi Hybrid (Current Implementation)
+
+#+begin_quote
+Wolfi-toolbox base + Nix packages isolated in =/nix/profile/bin=
+#+end_quote
+
+*** How It Works
+
+#+begin_src nix
+pkgs.dockerTools.buildLayeredImage {
+  fromImage = wolfiBaseImage;
+  contents = [ nixProfile ];  # Only /bin and /share, isolated path
+  config.Env = [
+    "PATH=/nix/profile/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  ];
+}
+#+end_src
+
+*** Critical Fix: Library Shadowing
+
+Initial implementation put Nix packages at root, which created =/lib= symlinks
+that *shadowed wolfi's glibc*. The distrobox entrypoint couldn't find its
+dynamic linker.
+
+Solution: =buildEnv= with =pathsToLink = [ "/bin" "/share" ]= then move to
+=/nix/profile/=.
+
+*** Characteristics
+
+| Aspect | Assessment |
+|--------|------------|
+| Size | *~500MB* compressed |
+| Reproducibility | Good - Nix tools pinned, base updates independently |
+| Distrobox compat | Native - wolfi-toolbox is built for it |
+| Complexity | Medium - needed to solve library shadowing |
+
+*** Key Learnings
+
+- =buildLayeredImage= with =contents= creates directories that can shadow base image
+- Nix's =/lib= symlinks (e.g., =libpython3.12.so -> /nix/store/...=) break glibc
+- Isolating Nix to a dedicated path (=/nix/profile=) avoids conflicts
+- Wolfi provides =apk= for runtime additions if agents need them
+
+*** Verdict
+
+Good balance for deployment use cases. Recommended approach.
+
+** 3. Nix-Inside (Not Implemented)
+
+#+begin_quote
+Minimal base + install Nix + run =nix develop= at runtime
+#+end_quote
+
+*** How It Would Work
+
+#+begin_src bash
+# One-time setup
+distrobox create --image ghcr.io/ublue-os/wolfi-toolbox --name dev
+distrobox enter dev
+curl -L https://nixos.org/nix/install | sh
+
+# Per-project
+cd /path/to/project
+nix develop  # or: nix profile install .#schmux .#claude
+#+end_src
+
+*** Characteristics
+
+| Aspect | Assessment |
+|--------|------------|
+| Size | *Tiny base* (~50-100MB), grows with Nix store |
+| Reproducibility | Excellent if pinned |
+| Distrobox compat | Native |
+| Complexity | Low to build, higher at runtime |
+
+*** Trade-offs
+
+Pros:
+- Smallest initial image
+- Full Nix flexibility at runtime
+- Same workflow as local dev
+- Nix store persists in distrobox home
+
+Cons:
+- Requires network for first =nix develop=
+- Shell activation overhead
+- Not "batteries included"
+
+*** When to Consider
+
+Interactive dev where you want full Nix flexibility and don't mind the
+activation step. Less suitable for "fire and forget" deployments.
+
+** 4. Containerfile + Nix as Builder (Not Implemented)
+
+#+begin_quote
+Traditional Dockerfile, but copy binaries from Nix builds
+#+end_quote
+
+*** How It Would Work
+
+#+begin_src dockerfile
+FROM ghcr.io/ublue-os/wolfi-toolbox
+
+# Copy specific binaries from Nix builds (done in CI)
+COPY --from=nix-builder /nix/store/.../bin/schmux /usr/local/bin/
+COPY --from=nix-builder /nix/store/.../bin/claude /usr/local/bin/
+#+end_src
+
+*** Characteristics
+
+| Aspect | Assessment |
+|--------|------------|
+| Size | Small - only copy needed binaries |
+| Reproducibility | Partial - Nix builds, Dockerfile layers aren't |
+| Distrobox compat | Native |
+| Complexity | Medium - two build systems |
+
+*** Trade-offs
+
+Pros:
+- Standard container build process
+- Small, predictable images
+- No Nix knowledge needed to run
+
+Cons:
+- Lose declarative =agentbox.toml= → image pipeline
+- Must handle binary dependencies carefully (glibc compat)
+- Two sources of truth for what's in the image
+
+*** When to Consider
+
+When integrating with existing container infrastructure that expects
+Dockerfiles. Could be useful for publishing to registries with standard
+tooling.
+
+** 5. Skip Nix for Images (Not Implemented)
+
+#+begin_quote
+Standard base + apk/apt install + download release binaries
+#+end_quote
+
+*** How It Would Work
+
+#+begin_src dockerfile
+FROM ghcr.io/ublue-os/wolfi-toolbox
+
+RUN apk add nodejs python3
+RUN curl -L https://github.com/.../releases/.../schmux -o /usr/local/bin/schmux
+#+end_src
+
+*** Characteristics
+
+| Aspect | Assessment |
+|--------|------------|
+| Size | Small |
+| Reproducibility | Poor - depends on external repos and releases |
+| Distrobox compat | Native |
+| Complexity | Low |
+
+*** When to Consider
+
+Quick prototyping. Tools with good release binaries and stable APIs. Not
+recommended for reproducible team environments.
+
+* Decision Matrix
+
+| Approach | Size | Reproducible | Distrobox | Complexity | Best For |
+|----------|------|--------------|-----------|------------|----------|
+| Pure Nix | 11GB+ | Excellent | Fragile | High | Hermetic requirements |
+| Wolfi Hybrid | ~500MB | Good | Native | Medium | *Deployment (recommended)* |
+| Nix-Inside | Tiny+ | Excellent | Native | Medium | Interactive dev |
+| Containerfile | Small | Partial | Native | Medium | Standard CI/CD |
+| No Nix | Small | Poor | Native | Low | Quick prototypes |
+
+* Technical Learnings
+
+** Nix + Container Base Images Don't Mix Well
+
+Nix expects to control the filesystem. When layered on a traditional base:
+
+1. =/lib= conflicts - Nix symlinks shadow system libraries
+2. =/bin= conflicts - Nix binaries may not find expected paths
+3. =/etc= conflicts - Nix packages may ship config that overrides base
+
+*Solution*: Isolate Nix to a dedicated prefix (=/nix/profile=) and only include
+=bin= and =share=, not =lib=.
+
+** Distrobox Expects "Real" Distros
+
+Distrobox's entry script:
+- Reads =/etc/os-release= to identify the distro
+- Calls the appropriate package manager to install dependencies
+- Expects standard FHS layout
+
+*Solutions*:
+- Use a base image designed for distrobox (wolfi-toolbox, ubuntu, fedora)
+- Or fake it with stub package managers (works but fragile)
+
+** buildLayeredImage Shadows, Doesn't Merge
+
+=contents= creates new layers that can replace directories from =fromImage=.
+This is different from =docker build= where each layer adds to the filesystem.
+
+#+begin_src nix
+# This can shadow /lib from the base image!
+contents = [ somePackage ];
+
+# Safer: use buildEnv with limited pathsToLink
+contents = [ (pkgs.buildEnv {
+  paths = [ somePackage ];
+  pathsToLink = [ "/bin" ];  # Only link binaries
+}) ];
+#+end_src
+
+** Service Lifecycle in Distrobox
+
+For orchestrators like schmux that use tmux:
+- Tmux sessions persist after shell exit
+- Services spawned in tmux survive =nix develop= exit
+- Can reconnect with =tmux attach= or =schmux attach=
+
+This means "Nix-Inside" would work for these use cases - you don't need baked
+images to keep services running.
+
+* Future Considerations
+
+** Potential Improvements (Not Planned)
+
+| Area | Current | Potential |
+|------|---------|-----------|
+| Image size | ~500MB | Trim bundles, exclude man pages |
+| CI/CD | Manual | GitHub Actions for build/push |
+| Multi-arch | x86_64 only | Add aarch64 (ARM, Graviton) |
+| Runtime flex | Baked only | =nix profile install= option |
+| Config generation | Manual | Generate =distrobox.ini= from =agentbox.toml= |
+
+** Open Questions
+
+*** OPEN Should we support "Nix-Inside" as a first-class option?
+
+Could provide a minimal base image with Nix pre-installed, letting users run
+=nix develop= inside. Would be smaller and more flexible but less "batteries
+included".
+
+*** OPEN Is multi-arch worth the CI complexity?
+
+ARM support (M-series Macs, Graviton) would expand use cases but requires
+cross-compilation or ARM CI runners.
+
+* References
+
+- [[https://github.com/ublue-os/toolboxes][ublue-os/toolboxes]] - Wolfi-toolbox and other distrobox images
+- [[https://distrobox.it/][Distrobox documentation]]
+- [[https://nixos.org/manual/nixpkgs/stable/#sec-pkgs-dockerTools][Nix dockerTools documentation]]
+- [[file:001-layered-runtime-architecture.org][001 - Layered Runtime Architecture]] - Related architecture decisions

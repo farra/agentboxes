@@ -1,0 +1,520 @@
+#+TITLE: 008 - Project Cleanup: Consolidate Image Building
+#+AUTHOR: jaaron
+#+STATUS: Draft
+#+CATEGORY: refactor
+#+CREATED: [2026-02-03]
+#+LAST_MODIFIED: [2026-02-03]
+#+SETUPFILE: ../../org-setup.org
+
+* Summary
+
+Consolidate the codebase around two first-class workflows: (1) =nix develop= for
+local development and (2) Containerfile-based images for distrobox deployment.
+Remove abandoned experimental approaches (nix-portable slim images, pure Nix
+dockerTools images) to reduce complexity and maintenance burden.
+
+* Motivation
+
+** Current State: 4 Parallel Image Building Approaches
+
+| Approach | Files | LOC | Status |
+|----------|-------|-----|--------|
+| mkProjectImage.nix | lib/mkProjectImage.nix | ~430 | Superseded by Containerfile |
+| mkSlimImage.nix | lib/mkSlimImage.nix | ~370 | Abandoned (nix-portable issues) |
+| mkProfilePackage.nix | lib/mkProfilePackage.nix | ~140 | Keep (used by Containerfile) |
+| Containerfile | images/Containerfile | ~50 | Recommended approach |
+
+** Problems
+
+1. *Code duplication* - Four files with nearly identical TOML parsing logic
+   (bundle resolution, orchestrator lookup, agent packages, NUR prefix handling)
+
+2. *Redundant distro configs* - 17 TOML files in =distros/= with overlapping
+   variants (schmux.toml, schmux-baked.toml, schmux-full.toml, schmux-slim.toml,
+   schmux-minimal.toml)
+
+3. *Complex flake.nix* - 276 lines exporting 24 image outputs, many for
+   deprecated approaches
+
+4. *Abandoned experiments still in tree* - mkSlimImage uses nix-portable which
+   has store path issues; mkProjectImage has ~100 lines of extraCommands for
+   distrobox compatibility hacks
+
+5. *Unclear recommendations* - CLAUDE.md describes all approaches without clear
+   guidance on which to use
+
+** Target State
+
+Two first-class workflows:
+
+1. *nix develop* - Local development via =mkProjectShell=
+2. *Containerfile images* - Pre-baked distrobox images via =mkProfilePackage= +
+   standard =podman build=
+
+Everything else is removed or deprecated.
+
+* Design
+
+** Data Flow
+
+Both workflows start from =agentbox.toml= and use Nix for package resolution:
+
+#+begin_example
+                        agentbox.toml
+                             │
+                             ▼
+                   ┌─────────────────────┐
+                   │ parseAgentboxConfig │  (shared Nix logic)
+                   │  - bundles          │
+                   │  - orchestrator     │
+                   │  - agents           │
+                   │  - packages         │
+                   └─────────────────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              ▼                             ▼
+    ┌──────────────────┐          ┌──────────────────┐
+    │  mkProjectShell  │          │ mkProfilePackage │
+    │                  │          │                  │
+    │  → devShell      │          │  → buildEnv      │
+    │  (nix develop)   │          │  (*-env package) │
+    └──────────────────┘          └──────────────────┘
+                                            │
+                                            ▼
+                                  ┌──────────────────┐
+                                  │   Containerfile  │
+                                  │                  │
+                                  │  nix profile     │
+                                  │  install .#*-env │
+                                  └──────────────────┘
+                                            │
+                                            ▼
+                                  ┌──────────────────┐
+                                  │   OCI Image      │
+                                  │  (distrobox)     │
+                                  └──────────────────┘
+#+end_example
+
+Key insight: Nix handles all package resolution. The Containerfile just installs
+the pre-composed =*-env= package.
+
+** Files to Remove
+
+| File | Reason |
+|------|--------|
+| lib/mkProjectImage.nix | Replaced by Containerfile approach |
+| lib/mkSlimImage.nix | Abandoned (nix-portable issues) |
+| images/base.nix | Only used by pure Nix path in mkProjectImage |
+
+** Files to Keep
+
+| File | Purpose |
+|------|---------|
+| lib/substrate.nix | Common tools layer |
+| lib/bundles.nix | Tool bundle definitions |
+| lib/mkProjectShell.nix | =nix develop= workflow |
+| lib/mkProfilePackage.nix | =buildEnv= for =nix profile install= |
+| images/Containerfile | Standard image building |
+| justfile | Build commands including image building |
+
+** Files to Remove (additional)
+
+| File | Reason |
+|------|--------|
+| scripts/build-image.sh | Move to justfile recipe |
+
+** Justfile
+
+The root justfile serves as executable documentation for common workflows:
+
+#+begin_src just
+# justfile - agentboxes build commands
+
+# ─────────────────────────────────────────────────────────────
+# Configuration
+# ─────────────────────────────────────────────────────────────
+
+registry := "ghcr.io/farra"
+flake_url := "github:farra/agentboxes"
+base_image := "ghcr.io/ublue-os/wolfi-toolbox:latest"
+
+# Detect container runtime (podman preferred)
+runtime := `command -v podman 2>/dev/null || command -v docker 2>/dev/null || echo "no-runtime"`
+
+# ─────────────────────────────────────────────────────────────
+# Help
+# ─────────────────────────────────────────────────────────────
+
+# List available commands (default)
+default:
+    @just --list
+
+# Show available orchestrators
+list:
+    @echo "Available orchestrators: schmux, gastown, openclaw, ralph"
+    @echo ""
+    @echo "Examples:"
+    @echo "  just build-image schmux"
+    @echo "  just release schmux v1.0.0"
+    @echo "  just test-local schmux"
+
+# ─────────────────────────────────────────────────────────────
+# Image Building
+# ─────────────────────────────────────────────────────────────
+
+# Build an OCI image (tagged as :latest)
+build-image name:
+    {{runtime}} build \
+        --build-arg ENV_NAME={{name}} \
+        --build-arg FLAKE_URL={{flake_url}} \
+        --build-arg BASE_IMAGE={{base_image}} \
+        -t {{registry}}/agentboxes-{{name}}:latest \
+        -f images/Containerfile .
+
+# Tag image with a version (keeps :latest too)
+tag-image name version:
+    {{runtime}} tag {{registry}}/agentboxes-{{name}}:latest {{registry}}/agentboxes-{{name}}:{{version}}
+
+# ─────────────────────────────────────────────────────────────
+# Registry Operations
+# ─────────────────────────────────────────────────────────────
+
+# Push :latest to registry
+push-image name:
+    {{runtime}} push {{registry}}/agentboxes-{{name}}:latest
+
+# Push specific version to registry
+push-version name version:
+    {{runtime}} push {{registry}}/agentboxes-{{name}}:{{version}}
+
+# Full release: build, tag version, push both :latest and :version
+release name version: (build-image name) (tag-image name version)
+    {{runtime}} push {{registry}}/agentboxes-{{name}}:latest
+    {{runtime}} push {{registry}}/agentboxes-{{name}}:{{version}}
+
+# ─────────────────────────────────────────────────────────────
+# Local Testing with Distrobox
+# ─────────────────────────────────────────────────────────────
+
+# Create a distrobox from local image
+distrobox-create name:
+    distrobox create --image {{registry}}/agentboxes-{{name}}:latest --name {{name}}
+
+# Enter distrobox
+distrobox-enter name:
+    distrobox enter {{name}}
+
+# Remove distrobox
+distrobox-rm name:
+    distrobox rm {{name}} --force
+
+# Full local test: build image, create distrobox, enter it
+test-local name: (build-image name) (distrobox-create name) (distrobox-enter name)
+
+# ─────────────────────────────────────────────────────────────
+# Development
+# ─────────────────────────────────────────────────────────────
+
+# Enter nix develop shell for an orchestrator
+dev name:
+    nix develop .#{{name}}
+
+# Build a package
+build name:
+    nix build .#{{name}}
+
+# Check flake
+check:
+    nix flake check
+#+end_src
+
+** Refactoring: Extract Shared TOML Parsing
+
+Currently duplicated across mkProjectShell.nix and mkProfilePackage.nix:
+- Bundle resolution (including rust-overlay handling)
+- Orchestrator lookup
+- Agent package resolution from llm-agents.nix
+- NUR package parsing (=nur:owner/package= prefix)
+
+Extract to =lib/parseAgentboxConfig.nix=:
+
+#+begin_src nix
+# lib/parseAgentboxConfig.nix
+{ pkgs, orchestrators ? {}, llmAgentsPkgs ? {}, nurPkgs ? null }:
+
+depsPath:
+
+let
+  config = builtins.fromTOML (builtins.readFile depsPath);
+  bundles = import ./bundles.nix;
+  # ... shared resolution logic ...
+in {
+  inherit config;
+  orchestratorPackages = /* ... */;
+  agentPackages = /* ... */;
+  bundlePackages = /* ... */;
+  rustPackages = /* ... */;
+  extraPackages = /* ... */;
+  allPackages = /* combined list */;
+  description = /* for shell hooks */;
+}
+#+end_src
+
+Then mkProjectShell and mkProfilePackage become thin wrappers:
+
+#+begin_src nix
+# lib/mkProjectShell.nix (simplified)
+{ pkgs, ... } @ args:
+
+depsPath:
+
+let
+  parsed = import ./parseAgentboxConfig.nix args depsPath;
+in pkgs.mkShell {
+  packages = parsed.allPackages;
+  shellHook = ''echo "Project environment: ${parsed.description}"'';
+}
+#+end_src
+
+** Distros Cleanup
+
+*** Current (17 files)
+
+#+begin_example
+distros/
+├── gastown-baked.toml
+├── gastown-full.toml
+├── gastown.toml
+├── openclaw-baked.toml
+├── openclaw-full.toml
+├── openclaw.toml
+├── ralph-baked.toml
+├── ralph-full.toml
+├── ralph.toml
+├── schmux-baked.toml
+├── schmux-full.toml
+├── schmux-minimal.toml
+├── schmux-slim.toml
+├── schmux.toml
+└── README.md
+#+end_example
+
+*** Proposed (5 files)
+
+Keep only meaningfully different variants:
+
+#+begin_example
+distros/
+├── schmux.toml       # Standard: orchestrator + claude-code + baseline
+├── gastown.toml      # Standard: orchestrator + baseline
+├── openclaw.toml     # Standard: orchestrator + baseline
+├── ralph.toml        # Standard: orchestrator + claude-code + baseline
+└── README.md
+#+end_example
+
+Remove:
+- =*-baked.toml= - Redundant (baked is now the only approach)
+- =*-full.toml= - Pure Nix images removed
+- =*-slim.toml= - Slim/bootstrap approach removed
+- =*-minimal.toml= - No clear use case
+
+If users need variants (e.g., with rust toolchain), they can:
+1. Copy a distro TOML and modify
+2. Use the template and customize their =agentbox.toml=
+
+** Flake.nix Simplification
+
+*** Current Outputs (per orchestrator)
+
+- =schmux= - package
+- =schmux-image= - routed via mkImage (slim or baked based on variant)
+- =schmux-baked-image= - explicit baked
+- =schmux-full-image= - explicit full
+- =schmux-env= - profile package
+
+*** Proposed Outputs (per orchestrator)
+
+- =schmux= - package
+- =schmux-env= - profile package (for Containerfile and =nix profile install=)
+
+Image building moves to =just build-image schmux= using the Containerfile.
+
+*** Shell Outputs (unchanged)
+
+- =devShells.schmux=
+- =devShells.gastown=
+- =devShells.openclaw=
+- =devShells.ralph=
+- =devShells.claude=
+- =devShells.codex=
+- etc.
+
+** CLAUDE.md Updates
+
+Simplify the "OCI Image Variants" section to describe only:
+
+1. Containerfile approach (recommended)
+2. How to build: =just build-image <name>=
+3. How to use with distrobox
+
+Remove references to:
+- Slim/bootstrap images
+- Pure Nix images
+- =nix build .#*-image= (no longer exported)
+
+** Migration Path
+
+For anyone using the deprecated approaches:
+
+| Old | New |
+|-----|-----|
+| =nix build .#schmux-image= | =just build-image schmux= |
+| =nix build .#schmux-full-image= | Not supported (use Containerfile) |
+| =nix build .#schmux-slim-image= | Not supported |
+| Slim bootstrap workflow | Use baked image instead |
+
+* Decision
+
+Proceed with cleanup:
+1. Remove mkProjectImage.nix, mkSlimImage.nix, images/base.nix, scripts/build-image.sh
+2. Extract shared config parsing to parseAgentboxConfig.nix
+3. Reduce distros/ to 4 files (one per orchestrator)
+4. Simplify flake.nix outputs
+5. Create root justfile with build/release/test workflows
+6. Update CLAUDE.md documentation
+
+* Tasks
+:PROPERTIES:
+:CATEGORY: tasks
+:END:
+
+** TODO [AB-008-01] Extract shared TOML parsing to parseAgentboxConfig.nix :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Create =lib/parseAgentboxConfig.nix= with shared logic:
+- TOML parsing
+- Bundle resolution (including rust-overlay)
+- Orchestrator package lookup
+- Agent package resolution from llm-agents.nix
+- NUR package parsing
+- Package list composition
+
+Update mkProjectShell.nix and mkProfilePackage.nix to use it.
+
+** TODO [AB-008-02] Remove deprecated image builders                       :p1:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Delete:
+- lib/mkProjectImage.nix
+- lib/mkSlimImage.nix
+- images/base.nix
+
+These are superseded by the Containerfile approach.
+
+** TODO [AB-008-03] Consolidate distros/ TOML files                        :p1:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Reduce to one TOML per orchestrator:
+- Keep: schmux.toml, gastown.toml, openclaw.toml, ralph.toml
+- Remove: *-baked.toml, *-full.toml, *-slim.toml, *-minimal.toml
+- Fix duplicated header in schmux.toml
+
+** TODO [AB-008-04] Simplify flake.nix outputs                             :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Remove image outputs:
+- Remove schmux-image, schmux-baked-image, schmux-full-image (x4 orchestrators)
+- Keep schmux-env (x4 orchestrators) for Containerfile and nix profile install
+- Remove mkImage router logic
+- Remove mkProjectImage and mkSlimImage imports
+
+** TODO [AB-008-05] Create root justfile                                   :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Create root justfile with recipes for:
+- Image building: =build-image=, =tag-image=
+- Registry: =push-image=, =push-version=, =release=
+- Distrobox testing: =distrobox-create=, =distrobox-enter=, =distrobox-rm=, =test-local=
+- Development: =dev=, =build=, =check=
+
+Remove scripts/build-image.sh (functionality moves to justfile).
+
+** TODO [AB-008-06] Update CLAUDE.md documentation                         :p2:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+- Simplify "OCI Image Variants" section
+- Document Containerfile as the image building approach
+- Remove references to deprecated approaches
+- Update build commands to use =just build-image=
+
+** TODO [AB-008-07] Update distros/README.md                               :p2:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Reflect simplified distro structure and explain how to create custom variants.
+
+** TODO [AB-008-08] Verify Containerfile workflow end-to-end               :p2:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Test complete workflow:
+1. =just build-image schmux=
+2. =just distrobox-create schmux=
+3. =just distrobox-enter schmux=
+4. Verify orchestrator and tools work
+5. =just distrobox-rm schmux= (cleanup)
+
+* Questions
+:PROPERTIES:
+:CATEGORY: questions
+:END:
+
+** DECIDED Should we keep nix build .#*-image outputs?
+:PROPERTIES:
+:DECIDED: [2026-02-03]
+:END:
+
+No. Move to Containerfile-only approach. Users run =just build-image <name>=
+instead of =nix build=. The *-env packages remain for =nix profile install=.
+
+Rationale: Containerfile approach is simpler, debuggable, and uses standard
+tooling. The Nix dockerTools approach added significant complexity for minimal
+reproducibility benefit (base image still comes from external registry).
+
+** OPEN Should we add CI/CD for image building?
+:PROPERTIES:
+:END:
+
+GitHub Actions could build and push images to ghcr.io on release. This would
+let users =distrobox create --image ghcr.io/farra/agentboxes-schmux= without
+building locally.
+
+Defer to future work - not blocking for cleanup.
+
+** OPEN Should parseAgentboxConfig.nix handle rust-overlay availability?
+:PROPERTIES:
+:END:
+
+mkProjectShell is called from mkProjectOutputs which has rust-overlay applied.
+But parseAgentboxConfig might be called from contexts without rust-overlay.
+
+Options:
+1. Require rust-overlay in all contexts (current approach)
+2. Make rust bundles gracefully degrade if rust-bin unavailable
+3. Pass rust-overlay as explicit parameter
+
+Leaning toward option 1 for simplicity.

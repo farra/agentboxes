@@ -1,0 +1,326 @@
+#+TITLE: 006 - Simplified agentbox.toml Format
+#+AUTHOR: jaaron
+#+STATUS: Draft
+#+CATEGORY: feature
+#+CREATED: [2026-02-02]
+#+LAST_MODIFIED: [2026-02-02]
+#+SETUPFILE: ../../org-setup.org
+
+* Summary
+
+Simplify =agentbox.toml= from 8+ overlapping sections to 5 focused sections with
+clear purposes. Remove magic (version mapping, legacy compatibility) in favor of
+explicit nixpkgs package names. This reduces maintenance burden and cognitive
+load while keeping the unique value: orchestrator/agent integration and wolfi
+hybrid images.
+
+* Motivation
+
+The current =agentbox.toml= format grew organically and now has:
+- =[tools]= with version mapping (python = "3.12" → python312)
+- =[bundles]= with predefined package sets
+- =[packages]= for arbitrary nixpkgs
+- =[nur]= for NUR packages
+- =[llm-agents]= for AI agents
+- =[agents]= (legacy format)
+- =[orchestrator]=
+- =[rust]= for rust components
+- =[image]=
+
+This complexity approaches what devenv/devshell provide, but without their
+mature ecosystems. We're reinventing wheels.
+
+** What We Learned
+
+After analyzing devenv and devshell (see [[file:005-oci-image-building-analysis.org][005]]):
+
+1. *We're not building a general-purpose dev tool* - we're building agent
+   environments
+2. *Our unique value* is orchestrator/agent integration and wolfi hybrid images
+3. *The magic is friction* - version mapping saves keystrokes but adds cognitive
+   load ("what did python = '3.12' become?")
+4. *Bundles are fine* but should be optional sugar, not the primary interface
+
+* Design
+
+** New Format
+
+#+begin_src toml
+[image]
+name = "schmux-wolfi"
+base = "wolfi"
+tag = "latest"
+
+[orchestrator]
+name = "schmux"
+
+agents = ["claude-code"]
+
+bundles = ["baseline-cli"]
+
+packages = [
+  "python312",
+  "nodejs_22",
+  "htop",
+  "openssh",
+  "nur:owner/package",
+]
+#+end_src
+
+** Section Ordering
+
+Top-down from "what is this" to "what's in it":
+
+1. *[image]* - What you're building (OCI config)
+2. *[orchestrator]* - The main thing
+3. *agents* - AI coding agents (list, not section)
+4. *bundles* - Predefined package sets (list, not section)
+5. *packages* - Raw nixpkgs names (list, not section)
+
+** Section Details
+
+*** [image] (optional)
+
+Only needed when building OCI images.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| name | string | "agentbox" | Image name |
+| tag | string | "latest" | Image tag |
+| base | string | "nix" | Base image: "nix" or "wolfi" |
+
+*** [orchestrator] (optional)
+
+| Key | Type | Description |
+|-----|------|-------------|
+| name | string | Orchestrator: schmux, gastown, openclaw, ralph |
+
+*** agents (list)
+
+AI coding agents from [[https://github.com/numtide/llm-agents.nix][numtide/llm-agents.nix]].
+
+#+begin_src toml
+agents = ["claude-code", "codex", "aider"]
+#+end_src
+
+*** bundles (list)
+
+Predefined package sets we maintain. Bundles are just named lists of nixpkgs
+packages.
+
+#+begin_src toml
+bundles = ["baseline-cli", "rust-stable"]
+#+end_src
+
+| Bundle | Contents |
+|--------|----------|
+| baseline-cli | ripgrep, fd, bat, eza, jq, fzf, delta, etc. |
+| complete-cli | baseline + more tools |
+| rust-stable | Rust stable toolchain via rust-overlay |
+| rust-nightly | Rust nightly toolchain |
+| python312 | Python 3.12 + common tools (optional) |
+
+*** packages (list)
+
+Exact nixpkgs package names. No magic, no version mapping. User's responsibility
+to use correct names.
+
+#+begin_src toml
+packages = [
+  "python312",
+  "nodejs_22",
+  "go_1_23",
+  "htop",
+  "vim",
+  "openssh",
+  "nur:owner/package",
+]
+#+end_src
+
+NUR packages use =nur:owner/package= prefix. Everything else is looked up in
+nixpkgs directly.
+
+** What's Removed
+
+| Old | Replacement |
+|-----|-------------|
+| =[tools]= with version mapping | Use exact names in =packages= |
+| =[rust]= components | Use =rust-stable= bundle or raw packages |
+| =[nur]= section | Use =nur:= prefix in =packages= |
+| =[llm-agents]= section | Renamed to =agents= list |
+| =[agents]= legacy format | Removed |
+| =include == syntax | Direct lists |
+
+** Why No Version Mapping
+
+The old format:
+#+begin_src toml
+[tools]
+python = "3.12"
+nodejs = "22"
+#+end_src
+
+Mapped to =python312=, =nodejs_22=. This "helped" users but:
+
+1. Added code complexity (versionMap in mkProjectShell)
+2. Created confusion ("what's the actual package?")
+3. Limited to versions we explicitly mapped
+4. Different mental model than raw nixpkgs
+
+New approach: just use =python312=. It's what you get anyway. If users need to
+find package names, =nix search nixpkgs python= works.
+
+** Bundles vs Packages
+
+Bundles are *optional sugar*. You can do everything with packages:
+
+#+begin_src toml
+# With bundle
+bundles = ["baseline-cli"]
+
+# Equivalent without bundle
+packages = ["ripgrep", "fd", "bat", "eza", "jq", "fzf", "delta", ...]
+#+end_src
+
+Bundles exist for convenience, not necessity. We maintain them; users can ignore
+them.
+
+* Implementation
+
+** Changes to lib/bundles.nix
+
+Add language "bundles" that are just package lists:
+
+#+begin_src nix
+{
+  baseline-cli = [ "ripgrep" "fd" "bat" "eza" "jq" "fzf" "delta" ... ];
+  complete-cli = [ ... ];
+
+  # Language bundles - could include extras
+  rust-stable = []; # Special handling via rust-overlay
+  rust-nightly = [];
+}
+#+end_src
+
+Rust bundles need special handling since they use rust-overlay, not plain
+nixpkgs.
+
+** Changes to mkProjectShell.nix / mkProjectImage.nix
+
+1. Remove =[tools]= version mapping
+2. Remove =[nur]= section handling
+3. Add =nur:= prefix parsing in packages
+4. Rename =config.llm-agents.include= to =config.agents=
+5. Change =config.bundles.include= to =config.bundles=
+6. Change =config.packages.include= to =config.packages=
+
+** Migration
+
+Old configs continue to work during transition (check for both formats), then
+deprecate.
+
+* Tasks
+:PROPERTIES:
+:CATEGORY: tasks
+:END:
+
+** TODO [AB-006-01] Update bundles.nix with language bundles            :p1:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Add rust-stable, rust-nightly bundles. Consider python/node bundles.
+
+** TODO [AB-006-02] Simplify mkProjectShell.nix                         :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Remove version mapping, add nur: prefix parsing, use direct list syntax.
+
+** TODO [AB-006-03] Simplify mkProjectImage.nix                         :p1:
+:PROPERTIES:
+:EFFORT: M
+:END:
+
+Same changes as mkProjectShell.
+
+** TODO [AB-006-04] Update existing distros/*.toml configs              :p1:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Migrate schmux-wolfi.toml, schmux-full.toml, etc. to new format.
+
+** TODO [AB-006-05] Update template agentbox.toml                       :p2:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Update templates/project/agentbox.toml with new format and documentation.
+
+** TODO [AB-006-06] Document package name discovery                     :p2:
+:PROPERTIES:
+:EFFORT: S
+:END:
+
+Add docs on how to find nixpkgs package names (nix search, search.nixos.org).
+
+* Future Considerations
+
+** Secrets Integration
+
+Could add optional secretspec.dev integration:
+
+#+begin_src toml
+secrets = "secretspec.toml"
+#+end_src
+
+Include =secretspec= in substrate. If config exists, shellHook validates secrets
+are available. See [[https://secretspec.dev][secretspec.dev]].
+
+** SSH-Ready Images
+
+For users who prefer SSH over distrobox:
+
+#+begin_src toml
+packages = ["openssh"]
+
+[image]
+ssh = true  # Start sshd, expect authorized_keys mount
+#+end_src
+
+* Questions
+:PROPERTIES:
+:CATEGORY: questions
+:END:
+
+** DECIDED Keep bundles as optional sugar
+:PROPERTIES:
+:DECIDED: [2026-02-02]
+:END:
+
+Bundles reduce typing for common cases but aren't required. Everything can be
+done with packages directly.
+
+** DECIDED No version mapping magic
+:PROPERTIES:
+:DECIDED: [2026-02-02]
+:END:
+
+Use exact nixpkgs names. Discoverability via =nix search= is good enough.
+Complexity reduction > convenience.
+
+** DECIDED Merge NUR into packages with prefix
+:PROPERTIES:
+:DECIDED: [2026-02-02]
+:END:
+
+=nur:owner/package= syntax in packages list. One section instead of two.
+
+** OPEN Should language bundles include extras?
+
+e.g., should =python312= bundle include pip, setuptools, virtualenv? Or just the
+interpreter?
+
+Leaning toward: just the interpreter. Extras go in packages.
